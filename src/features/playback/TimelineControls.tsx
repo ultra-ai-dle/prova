@@ -9,10 +9,43 @@ type Props = {
   isRunning: boolean;
   isPlaying: boolean;
   speed: number;
+  isError: boolean;
   onStepChange: (step: number) => void;
   onTogglePlay: () => void;
   onSpeedChange: (speed: number) => void;
+  onJumpToError: () => void;
 };
+
+const IconStepBack = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="19 20 9 12 19 4 19 20" />
+    <line x1="5" y1="19" x2="5" y2="5" />
+  </svg>
+);
+const IconStepForward = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="5 4 15 12 5 20 5 4" />
+    <line x1="19" y1="5" x2="19" y2="19" />
+  </svg>
+);
+const IconPlay = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+    <polygon points="5 3 19 12 5 21 5 3" />
+  </svg>
+);
+const IconPause = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="6" y="4" width="4" height="16" />
+    <rect x="14" y="4" width="4" height="16" />
+  </svg>
+);
+const IconTarget = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <circle cx="12" cy="12" r="6" />
+    <circle cx="12" cy="12" r="2" />
+  </svg>
+);
 
 export function TimelineControls({
   steps,
@@ -21,72 +54,118 @@ export function TimelineControls({
   isRunning,
   isPlaying,
   speed,
+  isError,
   onStepChange,
   onTogglePlay,
-  onSpeedChange
+  onSpeedChange,
+  onJumpToError
 }: Props) {
   const disabled = isRunning || steps.length === 0;
+  const hasError = steps.some((s) => s.runtimeError);
 
   return (
-    <section className="h-12 border-t border-prova-line grid grid-cols-[1fr_auto] items-center gap-3 px-3">
-      <div className="dot-scrollbar flex items-center gap-1 overflow-x-auto">
-        {steps.length === 0 && <span className="text-xs text-prova-muted">빈 타임라인</span>}
-        {steps.map((step, index) => {
-          const isLoop = branchLines.loop.includes(step.line);
-          const isBranch = branchLines.branch.includes(step.line);
-          const base = step.runtimeError
-            ? "bg-prova-red w-3 h-3"
-            : isLoop
-              ? "bg-prova-blue"
-              : isBranch
-                ? "bg-prova-purple rotate-45 rounded-[1px]"
-                : "bg-prova-line";
-          const current = index === currentStep ? "w-3 h-3 bg-white" : "w-2 h-2";
-          return (
-            <button
-              key={`${step.step}-${step.line}`}
-              className={`${base} ${current} rounded-full shrink-0`}
-              onClick={() => onStepChange(index)}
-              aria-label={`step-${index + 1}`}
-              disabled={disabled}
-            />
-          );
-        })}
+    <section className="shrink-0 border-t border-prova-line bg-[#0d1117]">
+      {/* Timeline track */}
+      <div className="px-3 pt-2 pb-1">
+        <div className="dot-scrollbar flex items-center gap-[3px] overflow-x-auto h-5">
+          {steps.length === 0 && (
+            <span className="text-[10px] text-prova-muted">타임라인 없음 — 코드를 실행하세요</span>
+          )}
+          {steps.map((step, index) => {
+            const isLoop = branchLines.loop.includes(step.line);
+            const isBranch = branchLines.branch.includes(step.line);
+            const isCurrent = index === currentStep;
+            const isErrDot = step.runtimeError;
+
+            let dotColor = "bg-[#30363d]";
+            if (isErrDot) dotColor = "bg-prova-red";
+            else if (isLoop) dotColor = "bg-[#388bfd]";
+            else if (isBranch) dotColor = "bg-prova-purple";
+
+            return (
+              <button
+                key={`${step.step}-${step.line}`}
+                className={`shrink-0 rounded-full transition-all duration-150 ${dotColor} ${
+                  isCurrent
+                    ? "w-[10px] h-[10px] ring-2 ring-white/70 ring-offset-1 ring-offset-[#0d1117]"
+                    : isBranch
+                      ? "w-[7px] h-[7px] rotate-45 rounded-[1px]"
+                      : "w-[6px] h-[6px]"
+                }`}
+                onClick={() => onStepChange(index)}
+                aria-label={`step-${index + 1}`}
+                disabled={disabled}
+              />
+            );
+          })}
+        </div>
       </div>
 
-      <div className="flex items-center gap-1">
-        <button
-          className="h-7 px-2 rounded border border-prova-line bg-[#21262d] disabled:opacity-40"
-          onClick={() => onStepChange(currentStep - 1)}
-          disabled={disabled}
-        >
-          ◀
-        </button>
-        <button
-          className="h-7 px-2 rounded border border-prova-line bg-[#21262d] disabled:opacity-40"
-          onClick={() => onStepChange(currentStep + 1)}
-          disabled={disabled}
-        >
-          ▶
-        </button>
-        <button
-          className="h-7 px-2 rounded border border-prova-line bg-[#21262d] disabled:opacity-40"
-          onClick={onTogglePlay}
-          disabled={disabled}
-        >
-          {isPlaying ? "⏸" : "▷"}
-        </button>
-        <select
-          className="h-7 rounded border border-prova-line bg-[#21262d] px-1"
-          value={speed}
-          onChange={(e) => onSpeedChange(Number(e.target.value))}
-          disabled={disabled}
-        >
-          <option value={0.5}>×0.5</option>
-          <option value={1}>×1</option>
-          <option value={1.5}>×1.5</option>
-          <option value={2}>×2</option>
-        </select>
+      {/* Controls row */}
+      <div className="h-10 flex items-center justify-between px-3 pb-1">
+        {/* Step info */}
+        <div className="text-[10px] text-prova-muted font-mono w-24">
+          {steps.length > 0
+            ? `${currentStep + 1} / ${steps.length}`
+            : "—"}
+        </div>
+
+        {/* Playback controls */}
+        <div className="flex items-center gap-1">
+          <button
+            className="h-7 px-2 flex items-center gap-1 rounded border border-prova-line bg-[#161b22] text-[11px] text-prova-muted hover:text-white hover:border-[#58a6ff]/40 transition-colors disabled:opacity-30"
+            onClick={() => onStepChange(currentStep - 1)}
+            disabled={disabled || currentStep === 0}
+          >
+            <IconStepBack />
+            <span>STEP BACK</span>
+          </button>
+
+          <button
+            className="h-7 px-3 flex items-center gap-1 rounded border border-prova-line bg-[#161b22] text-[11px] text-prova-muted hover:text-white hover:border-prova-green/40 transition-colors disabled:opacity-30"
+            onClick={onTogglePlay}
+            disabled={disabled}
+          >
+            {isPlaying ? <IconPause /> : <IconPlay />}
+            <span>{isPlaying ? "PAUSE" : "PLAY"}</span>
+          </button>
+
+          <button
+            className="h-7 px-2 flex items-center gap-1 rounded border border-prova-line bg-[#161b22] text-[11px] text-prova-muted hover:text-white hover:border-[#58a6ff]/40 transition-colors disabled:opacity-30"
+            onClick={() => onStepChange(currentStep + 1)}
+            disabled={disabled || currentStep >= steps.length - 1}
+          >
+            <span>STEP FORWARD</span>
+            <IconStepForward />
+          </button>
+
+          {(isError || hasError) && (
+            <button
+              className="h-7 px-2 flex items-center gap-1 rounded border border-prova-red/40 bg-[#2d1112]/60 text-[11px] text-prova-red hover:bg-[#3d1a1a] transition-colors disabled:opacity-30"
+              onClick={onJumpToError}
+              disabled={disabled}
+            >
+              <IconTarget />
+              <span>JUMP TO ERROR</span>
+            </button>
+          )}
+        </div>
+
+        {/* Speed control */}
+        <div className="flex items-center gap-2 w-24 justify-end">
+          <span className="text-[10px] text-prova-muted">Speed</span>
+          <select
+            className="h-6 rounded border border-prova-line bg-[#161b22] text-[10px] text-[#c9d1d9] px-1 focus:outline-none"
+            value={speed}
+            onChange={(e) => onSpeedChange(Number(e.target.value))}
+            disabled={disabled}
+          >
+            <option value={0.5}>×0.5</option>
+            <option value={1}>×1</option>
+            <option value={1.5}>×1.5</option>
+            <option value={2}>×2</option>
+          </select>
+        </div>
       </div>
     </section>
   );
