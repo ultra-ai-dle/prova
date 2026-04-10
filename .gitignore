@@ -27,3 +27,6 @@ pnpm-debug.log*
 .idea/
 .vscode/
 .acommit/
+
+# build info
+tsconfig.tsbuildinfo

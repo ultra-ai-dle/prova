@@ -1108,7 +1108,7 @@ export function ThreeDVolumePanel({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="h-7 w-7 flex items-center justify-center rounded border border-prova-line bg-prova-panel text-prova-muted hover:text-white disabled:opacity-30"
+              className="h-7 px-2 flex items-center justify-center rounded border border-prova-line bg-prova-panel text-prova-muted hover:text-white disabled:opacity-30 text-[10px] font-mono"
               onClick={() => {
                 const prev = playbackControls.currentStep - 1;
                 if (!validStepRange) {
@@ -1124,30 +1124,20 @@ export function ThreeDVolumePanel({
               }
               aria-label="Previous step"
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="19 20 9 12 19 4 19 20" /><line x1="5" y1="19" x2="5" y2="5" />
-              </svg>
+              Prev
             </button>
             <button
               type="button"
-              className="h-7 w-7 flex items-center justify-center rounded border border-prova-line bg-prova-panel text-prova-muted hover:text-white disabled:opacity-30"
+              className="h-7 px-2 flex items-center justify-center rounded border border-prova-line bg-prova-panel text-prova-muted hover:text-white disabled:opacity-30 text-[10px] font-mono"
               onClick={playbackControls.onTogglePlay}
               disabled={playbackControls.disabled}
               aria-label={playbackControls.isPlaying ? "Pause" : "Play"}
             >
-              {playbackControls.isPlaying ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                  <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
-                </svg>
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-              )}
+              {playbackControls.isPlaying ? "Pause" : "Play"}
             </button>
             <button
               type="button"
-              className={`h-7 w-7 flex items-center justify-center rounded border transition-colors ${
+              className={`h-7 px-2 flex items-center justify-center rounded border transition-colors text-[10px] font-mono ${
                 playbackControls.disabled
                 || playbackControls.currentStep >= (validStepRange ? validStepRange.end : playbackControls.totalSteps - 1)
                   ? "border-prova-line bg-[#161b22] text-prova-muted opacity-30 cursor-not-allowed"
@@ -1168,9 +1158,7 @@ export function ThreeDVolumePanel({
               }
               aria-label="Next step"
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="5 4 15 12 5 20 5 4" /><line x1="19" y1="5" x2="19" y2="19" />
-              </svg>
+              Next
             </button>
             <div className="ml-auto flex items-center gap-1">
               <span className="text-[10px] text-prova-muted">Speed</span>
