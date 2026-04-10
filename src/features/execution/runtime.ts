@@ -16,7 +16,7 @@ export class ProvaRuntime {
 
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private callbacks: RuntimeCallbacks) {}
+  constructor(private callbacks: RuntimeCallbacks, private language: string = "python") {}
 
   init() {
     this.createWorker();
@@ -27,7 +27,7 @@ export class ProvaRuntime {
       this.callbacks.onInvalidInput("코드를 입력한 후 디버깅을 시작하세요.");
       return;
     }
-    if (stdin.trim().length === 0) {
+    if (this.language === "python" && stdin.trim().length === 0) {
       this.callbacks.onInvalidInput("예시 입력(stdin)을 입력한 후 디버깅을 시작하세요.");
       return;
     }
@@ -57,9 +57,14 @@ export class ProvaRuntime {
     this.worker = null;
   }
 
+  private workerUrl(): string {
+    if (this.language === "javascript") return "/worker/js.worker.js";
+    return "/worker/pyodide.worker.js";
+  }
+
   private createWorker() {
     this.worker?.terminate();
-    this.worker = new Worker("/worker/pyodide.worker.js");
+    this.worker = new Worker(this.workerUrl());
     this.worker.onmessage = (event: MessageEvent) => {
       const data = event.data;
       if (data.type === "ready") {
