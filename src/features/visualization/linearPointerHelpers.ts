@@ -117,7 +117,7 @@ export function formatLinearAlgoContext(
     if (typeof v === "number" && Number.isFinite(v)) {
       parts.push(`${k}=${v}`);
     } else if (typeof v === "boolean") {
-      parts.push(`${k}=${v}`);
+      parts.push(`${k}=${v ? "T" : "F"}`);
     } else if (typeof v === "string" && v.length <= 48) {
       parts.push(`${k}=${v}`);
     }
