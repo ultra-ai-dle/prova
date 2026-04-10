@@ -50,10 +50,10 @@ const IconPencil = () => (
   </svg>
 );
 /* ── Helpers ─────────────────────────────────────────────── */
-function runButtonLabel(status: string, hasTrace: boolean, isCodeEmpty: boolean, isStdinEmpty: boolean) {
+function runButtonLabel(status: string, hasTrace: boolean, isCodeEmpty: boolean, isStdinEmpty: boolean, language = "python") {
   if (isCodeEmpty) return "코드를 입력하세요";
   if (isStdinEmpty) return "예시 입력을 입력하세요";
-  if (status === "loading") return "Python 준비 중...";
+  if (status === "loading") return language === "javascript" ? "JS 환경 준비 중..." : "Python 준비 중...";
   if (status === "running") return "디버깅 중...";
   if (status === "reinitializing") return "초기화 중...";
   if (status === "error") return "디버깅 불가";
@@ -66,6 +66,47 @@ const PY_KEYWORDS = new Set([
   "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal",
   "not", "or", "pass", "raise", "return", "try", "while", "with", "yield"
 ]);
+
+const JS_KEYWORDS = new Set([
+  "break", "case", "catch", "class", "const", "continue", "debugger", "default",
+  "delete", "do", "else", "export", "extends", "finally", "for", "function", "if",
+  "import", "in", "instanceof", "let", "new", "of", "return", "static", "super",
+  "switch", "this", "throw", "try", "typeof", "var", "void", "while", "with", "yield",
+  "true", "false", "null", "undefined", "async", "await"
+]);
+
+function highlightJsLine(line: string): Array<{ text: string; className: string }> {
+  const tokens: Array<{ text: string; className: string }> = [];
+  const pattern = /(\/\/.*$|`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b[A-Za-z_$][A-Za-z0-9_$]*\b|\b\d+(?:\.\d+)?\b)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null = pattern.exec(line);
+  while (match) {
+    if (match.index > lastIndex) {
+      tokens.push({ text: line.slice(lastIndex, match.index), className: "text-[#c9d1d9]" });
+    }
+    const token = match[0];
+    if (token.startsWith("//")) {
+      tokens.push({ text: token, className: "text-[#8b949e] italic" });
+    } else if (/^["`']/.test(token)) {
+      tokens.push({ text: token, className: "text-[#a5d6ff]" });
+    } else if (/^\d/.test(token)) {
+      tokens.push({ text: token, className: "text-[#79c0ff]" });
+    } else if (JS_KEYWORDS.has(token)) {
+      tokens.push({ text: token, className: "text-[#ff7b72]" });
+    } else {
+      tokens.push({ text: token, className: "text-[#d2a8ff]" });
+    }
+    lastIndex = match.index + token.length;
+    match = pattern.exec(line);
+  }
+  if (lastIndex < line.length) {
+    tokens.push({ text: line.slice(lastIndex), className: "text-[#c9d1d9]" });
+  }
+  if (tokens.length === 0) {
+    tokens.push({ text: " ", className: "text-[#c9d1d9]" });
+  }
+  return tokens;
+}
 
 function highlightPythonLine(line: string): Array<{ text: string; className: string }> {
   const tokens: Array<{ text: string; className: string }> = [];
@@ -142,10 +183,15 @@ const BLOCKED_RUNTIME_VAR_NAMES = new Set([
   "pycache_prefix"
 ]);
 
-function isRuntimeNoiseVar(name: string, value: unknown) {
+function isRuntimeNoiseVar(name: string, value: unknown, language = "python") {
   const key = name.trim();
-  if (BLOCKED_RUNTIME_VAR_NAMES.has(key)) return true;
   if (key.startsWith("__")) return true;
+  if (language === "javascript") {
+    if (["console", "readline", "arguments"].includes(key)) return true;
+    return false;
+  }
+  // Python 전용 필터
+  if (BLOCKED_RUNTIME_VAR_NAMES.has(key)) return true;
   if (/(^_|import|frozen|zipimport|built-?in|site-packages|python3)/i.test(key)) return true;
   const text = typeof value === "string" ? value : JSON.stringify(value);
   if (typeof text === "string" && /<module '|zipimporter|_frozen_importlib|built-in\)|site-packages/i.test(text)) {
@@ -154,22 +200,22 @@ function isRuntimeNoiseVar(name: string, value: unknown) {
   return false;
 }
 
-function sanitizeRawTrace(rawTrace: RawTraceStep[]): RawTraceStep[] {
+function sanitizeRawTrace(rawTrace: RawTraceStep[], language = "python"): RawTraceStep[] {
   return rawTrace.map((step) => {
     const vars = Object.fromEntries(
-      Object.entries(step.vars || {}).filter(([name, value]) => !isRuntimeNoiseVar(name, value))
+      Object.entries(step.vars || {}).filter(([name, value]) => !isRuntimeNoiseVar(name, value, language))
     );
     return { ...step, vars };
   });
 }
 
-function sanitizeVarTypes(varTypes: Record<string, string>) {
+function sanitizeVarTypes(varTypes: Record<string, string>, language = "python") {
   return Object.fromEntries(
-    Object.entries(varTypes || {}).filter(([name]) => !isRuntimeNoiseVar(name, ""))
+    Object.entries(varTypes || {}).filter(([name]) => !isRuntimeNoiseVar(name, "", language))
   );
 }
 
-function collectUserDeclaredSymbols(code: string) {
+function collectUserDeclaredSymbols(code: string, language = "python") {
   const allowed = new Set<string>([
     "i", "j", "k", "r", "c", "x", "y", "z", "nx", "ny", "nr", "nc", "lj", "rj", "nk"
   ]);
@@ -177,68 +223,96 @@ function collectUserDeclaredSymbols(code: string) {
   const add = (name: string) => {
     const key = name.trim();
     if (!key) return;
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return;
+    if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)) return;
     if (key === "_") return;
     allowed.add(key);
   };
   const addMultiTargets = (segment: string) => {
-    segment.split(",").forEach((part) => add(part.replace(/[\(\)\[\]\{\}]/g, "").trim()));
+    segment.split(",").forEach((part) => add(part.replace(/[\(\)\[\]\{\}\s]/g, "")));
   };
+
   for (const raw of lines) {
-    const line = raw.replace(/#.*/, "").trim();
+    // 언어별 주석 제거
+    const line = (language === "javascript" ? raw.replace(/\/\/.*/, "") : raw.replace(/#.*/, "")).trim();
     if (!line) continue;
-    const fn = line.match(/^def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)/);
-    if (fn) {
-      add(fn[1]);
-      fn[2].split(",").forEach((arg) => add(arg.split("=")[0].trim()));
-    }
-    const cls = line.match(/^class\s+([A-Za-z_][A-Za-z0-9_]*)/);
-    if (cls) add(cls[1]);
-    const imp = line.match(/^import\s+(.+)$/);
-    if (imp) {
-      imp[1].split(",").forEach((chunk) => {
-        const part = chunk.trim();
-        if (!part) return;
-        const asIdx = part.indexOf(" as ");
-        if (asIdx >= 0) add(part.slice(asIdx + 4).trim());
-        else add(part.split(".")[0]);
-      });
-    }
-    const fromImp = line.match(/^from\s+.+\s+import\s+(.+)$/);
-    if (fromImp) {
-      fromImp[1].split(",").forEach((chunk) => {
-        const part = chunk.trim();
-        if (!part || part === "*") return;
-        const asIdx = part.indexOf(" as ");
-        if (asIdx >= 0) add(part.slice(asIdx + 4).trim());
-        else add(part);
-      });
-    }
-    const forLoop = line.match(/^for\s+(.+?)\s+in\s+/);
-    if (forLoop) addMultiTargets(forLoop[1]);
-    const withAs = line.match(/^with\s+.+\s+as\s+([A-Za-z_][A-Za-z0-9_]*)/);
-    if (withAs) add(withAs[1]);
-    const assignIdx = line.indexOf("=");
-    if (assignIdx > 0 && !line.includes("==") && !line.includes(">=") && !line.includes("<=") && !line.includes("!=")) {
-      const left = line.slice(0, assignIdx).trim();
-      if (left) addMultiTargets(left);
+
+    if (language === "javascript") {
+      // const/let/var 선언
+      const jsDecl = line.match(/^(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)/);
+      if (jsDecl) add(jsDecl[1]);
+
+      // function 선언 + 파라미터
+      const jsFn = line.match(/^(?:async\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\(([^)]*)\)/);
+      if (jsFn) {
+        add(jsFn[1]);
+        jsFn[2].split(",").forEach((arg) => add(arg.replace(/[=\s].*/, "").replace(/^\.\.\./, "").trim()));
+      }
+
+      // for 루프 변수: for (let x = ...) / for (const x of ...)
+      const jsFor = line.match(/^for\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)/);
+      if (jsFor) add(jsFor[1]);
+
+      // 일반 대입 (const/let/var 제거 후)
+      const assignIdx = line.indexOf("=");
+      if (assignIdx > 0 && !line.includes("==") && !line.includes(">=") && !line.includes("<=") && !line.includes("!=") && !line.includes("=>")) {
+        const left = line.slice(0, assignIdx).trim().replace(/^(?:const|let|var)\s+/, "");
+        if (left && !/[.([\s]/.test(left)) add(left);
+      }
+    } else {
+      // Python 기존 로직
+      const fn = line.match(/^def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)/);
+      if (fn) {
+        add(fn[1]);
+        fn[2].split(",").forEach((arg) => add(arg.split("=")[0].trim()));
+      }
+      const cls = line.match(/^class\s+([A-Za-z_][A-Za-z0-9_]*)/);
+      if (cls) add(cls[1]);
+      const imp = line.match(/^import\s+(.+)$/);
+      if (imp) {
+        imp[1].split(",").forEach((chunk) => {
+          const part = chunk.trim();
+          if (!part) return;
+          const asIdx = part.indexOf(" as ");
+          if (asIdx >= 0) add(part.slice(asIdx + 4).trim());
+          else add(part.split(".")[0]);
+        });
+      }
+      const fromImp = line.match(/^from\s+.+\s+import\s+(.+)$/);
+      if (fromImp) {
+        fromImp[1].split(",").forEach((chunk) => {
+          const part = chunk.trim();
+          if (!part || part === "*") return;
+          const asIdx = part.indexOf(" as ");
+          if (asIdx >= 0) add(part.slice(asIdx + 4).trim());
+          else add(part);
+        });
+      }
+      const forLoop = line.match(/^for\s+(.+?)\s+in\s+/);
+      if (forLoop) addMultiTargets(forLoop[1]);
+      const withAs = line.match(/^with\s+.+\s+as\s+([A-Za-z_][A-Za-z0-9_]*)/);
+      if (withAs) add(withAs[1]);
+      const assignIdx = line.indexOf("=");
+      if (assignIdx > 0 && !line.includes("==") && !line.includes(">=") && !line.includes("<=") && !line.includes("!=")) {
+        const left = line.slice(0, assignIdx).trim();
+        if (left) addMultiTargets(left);
+      }
     }
   }
   return allowed;
 }
 
-function sanitizeRawTraceWithAllowlist(rawTrace: RawTraceStep[], allowed: Set<string>): RawTraceStep[] {
+function sanitizeRawTraceWithAllowlist(rawTrace: RawTraceStep[], allowed: Set<string>, language = "python"): RawTraceStep[] {
   return rawTrace.map((step) => {
     const vars = Object.fromEntries(
-      Object.entries(step.vars || {}).filter(([name, value]) => allowed.has(name) && !isRuntimeNoiseVar(name, value))
+      Object.entries(step.vars || {}).filter(([name, value]) => allowed.has(name) && !isRuntimeNoiseVar(name, value, language))
     );
     return { ...step, vars };
   });
 }
 
-function sanitizeVarTypesWithAllowlist(varTypes: Record<string, string>, allowed: Set<string>) {
+function sanitizeVarTypesWithAllowlist(varTypes: Record<string, string>, allowed: Set<string>, language = "python") {
   return Object.fromEntries(
-    Object.entries(varTypes || {}).filter(([name]) => allowed.has(name) && !isRuntimeNoiseVar(name, ""))
+    Object.entries(varTypes || {}).filter(([name]) => allowed.has(name) && !isRuntimeNoiseVar(name, "", language))
   );
 }
 
@@ -322,7 +396,7 @@ export default function Page() {
   const isVisualizing = uiMode === "visualizing" || isError || isFallback;
   const isDebugMode = uiMode !== "ready";
   const isCodeEmpty = code.trim().length === 0;
-  const isStdinEmpty = stdin.trim().length === 0;
+  const isStdinEmpty = language !== "javascript" && stdin.trim().length === 0;
   const isAnalyzingCode = pyodideStatus === "running" && !metadata && rawTrace.length > 0;
   const displayTags = useMemo(
     () => normalizeAndDedupeTags(metadata?.tags ?? [], 20),
@@ -539,17 +613,22 @@ export default function Page() {
   };
 
   useEffect(() => {
+    setUiMode("ready");
+    setMetadata(null);
+    setPyodideStatus("loading");
     const runtime = new ProvaRuntime({
       onReady: () => setPyodideStatus("ready"),
       onDone: async (payload) => {
-        const allowlist = collectUserDeclaredSymbols(codeRef.current);
+        const allowlist = collectUserDeclaredSymbols(codeRef.current, language);
         const sanitizedRawTrace = sanitizeRawTraceWithAllowlist(
-          sanitizeRawTrace(payload.rawTrace ?? []),
-          allowlist
+          sanitizeRawTrace(payload.rawTrace ?? [], language),
+          allowlist,
+          language
         );
         const sanitizedVarTypes = sanitizeVarTypesWithAllowlist(
-          sanitizeVarTypes(payload.varTypes ?? {}),
-          allowlist
+          sanitizeVarTypes(payload.varTypes ?? {}, language),
+          allowlist,
+          language
         );
         const sanitizedPayload = {
           ...payload,
@@ -572,7 +651,7 @@ export default function Page() {
                 const analyze = await fetch("/api/analyze", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ code: codeRef.current, varTypes: sanitizedVarTypes })
+                  body: JSON.stringify({ code: codeRef.current, varTypes: sanitizedVarTypes, language })
                 });
                 if (!analyze.ok) {
                   let detail = "";
@@ -646,11 +725,11 @@ export default function Page() {
         setPyodideStatus("ready");
         addToast("warn", message);
       }
-    });
+    }, language);
     runtime.init();
     runtimeRef.current = runtime;
     return () => runtime.destroy();
-  }, [setCurrentStep, setGlobalError, setMetadata, setPyodideStatus, setUiMode, setWorkerResult, stdin]);
+  }, [language, setCurrentStep, setGlobalError, setMetadata, setPyodideStatus, setUiMode, setWorkerResult, stdin]);
 
   useEffect(() => {
     if (!playback.isPlaying) {
@@ -723,8 +802,8 @@ export default function Page() {
           <div className="flex items-center gap-2">
             <IconWarning />
             <span>
-              {pyodideStatus === "loading" && "Python 환경 준비 중입니다. 잠시만 기다려 주세요."}
-              {pyodideStatus === "error" && "Python 환경 초기화에 실패했습니다. 페이지를 새로고침해 주세요."}
+              {pyodideStatus === "loading" && (language === "javascript" ? "JS 환경 준비 중입니다. 잠시만 기다려 주세요." : "Python 환경 준비 중입니다. 잠시만 기다려 주세요.")}
+              {pyodideStatus === "error" && (language === "javascript" ? "JS 환경 초기화에 실패했습니다. 페이지를 새로고침해 주세요." : "Python 환경 초기화에 실패했습니다. 페이지를 새로고침해 주세요.")}
               {isFallback && "AI 연결에 실패했습니다. 기본 변수 뷰로 코드 흐름을 추적합니다."}
               {!isFallback && globalError && `AI 분석 실패: ${globalError.message}`}
             </span>
@@ -806,9 +885,7 @@ export default function Page() {
                   aria-label="코드 언어 선택"
                 >
                   <option value="python">Python</option>
-                  <option value="javascript" disabled>
-                    JavaScript (준비중)
-                  </option>
+                  <option value="javascript">JavaScript</option>
                   <option value="java" disabled>
                     Java (준비중)
                   </option>
@@ -879,7 +956,7 @@ export default function Page() {
                               {lineNo}
                             </span>
                             <span className="pl-2">
-                              {highlightPythonLine(line).map((token, idx) => (
+                              {(language === "javascript" ? highlightJsLine : highlightPythonLine)(line).map((token, idx) => (
                                 <span key={`edit-${lineIdx}-${idx}`} className={token.className}>
                                   {token.text}
                                 </span>
@@ -958,7 +1035,7 @@ export default function Page() {
                           className={`pl-2 whitespace-pre ${active && !error ? "text-white" : ""}`}
                           style={{ tabSize }}
                         >
-                          {highlightPythonLine(line).map((token, idx) => (
+                          {(language === "javascript" ? highlightJsLine : highlightPythonLine)(line).map((token, idx) => (
                             <span key={`${lineNo}-${idx}`} className={token.className}>
                               {token.text}
                             </span>
@@ -971,10 +1048,12 @@ export default function Page() {
               )}
             </div>
 
-            {/* Python badge */}
+            {/* Language badge */}
             <div className="shrink-0 px-3 py-2 border-t border-prova-line bg-[#0f141a]">
               <span className="text-[10px] text-prova-muted font-mono">
-                Python 3.11 · Standard Library · No external packages
+                {language === "javascript"
+                  ? "JavaScript ES2022 · 동기 코드만 지원 · async/await 미지원"
+                  : "Python 3.11 · Standard Library · No external packages"}
               </span>
             </div>
           </section>
@@ -1286,7 +1365,7 @@ export default function Page() {
                         runtimeRef.current?.run(code, stdin);
                       }}
                     >
-                  {runButtonLabel(pyodideStatus, mergedTrace.length > 0, isCodeEmpty, isStdinEmpty)}
+                  {runButtonLabel(pyodideStatus, mergedTrace.length > 0, isCodeEmpty, isStdinEmpty, language)}
                     </button>
                   </div>
                 </div>
