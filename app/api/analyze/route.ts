@@ -3,6 +3,7 @@ import { AnalyzeMetadata, LinearPivotSpec } from "@/types/prova";
 import { inferGraphModeFromCode } from "@/lib/graphModeInference";
 import { enrichAnalyzeMetadataWithPartitionValuePivots } from "@/lib/partitionPivotEnrichment";
 import { normalizeAndDedupeTags } from "@/lib/tagNormalize";
+import { buildChain, callWithFallback, GeminiOptions } from "@/lib/ai-providers";
 
 type Panel = "GRID" | "LINEAR" | "GRAPH" | "VARIABLES";
 type Strategy = "GRID" | "LINEAR" | "GRID_LINEAR" | "GRAPH";
@@ -33,22 +34,6 @@ type AnalyzeAiResponse = {
 
 const ANALYZE_CODE_CHAR_LIMIT = 5000;
 const ANALYZE_VAR_TYPES_LIMIT = 40;
-const ANALYZE_REQUEST_TIMEOUT_MS = 20000;
-
-function pickProvider() {
-  const gemini = process.env.GEMINI_API_KEY;
-  const openai = process.env.OPENAI_API_KEY;
-  if (gemini) return "gemini" as const;
-  if (openai) return "openai" as const;
-  return null;
-}
-
-function availableProviders() {
-  const providers: Array<"gemini" | "openai"> = [];
-  if (process.env.GEMINI_API_KEY) providers.push("gemini");
-  if (process.env.OPENAI_API_KEY) providers.push("openai");
-  return providers;
-}
 
 function stripCodeFence(text: string) {
   return text
@@ -92,13 +77,38 @@ function extractFirstJsonObject(text: string) {
   return cleaned;
 }
 
+function sanitizeJsonCandidate(text: string) {
+  return text
+    .replace(/^\uFEFF/, "")
+    .replace(/[“”]/g, "\"")
+    .replace(/[‘’]/g, "'")
+    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
+    .trim();
+}
+
 function tryParseAnalyzeJson(text: string): AnalyzeAiResponse | null {
   const candidate = extractFirstJsonObject(text);
-  try {
-    return JSON.parse(candidate) as AnalyzeAiResponse;
-  } catch {
-    return null;
+  const attempts: string[] = [];
+
+  attempts.push(candidate);
+  attempts.push(sanitizeJsonCandidate(candidate));
+
+  const first = candidate.indexOf("{");
+  const last = candidate.lastIndexOf("}");
+  if (first >= 0 && last > first) {
+    attempts.push(candidate.slice(first, last + 1));
+    attempts.push(sanitizeJsonCandidate(candidate.slice(first, last + 1)));
   }
+
+  for (const raw of attempts) {
+    try {
+      return JSON.parse(raw) as AnalyzeAiResponse;
+    } catch {
+      // try next repaired candidate
+    }
+  }
+  return null;
 }
 
 function uniq(items: string[]) {
@@ -165,200 +175,41 @@ function detectDirectionMapVars(code: string) {
   return Array.from(vars);
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
-
-async function fetchWithRetry(
-  url: string,
-  init: RequestInit,
-  attempts = 3,
-): Promise<Response> {
-  let lastRes: Response | null = null;
-  for (let i = 0; i < attempts; i += 1) {
-    const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      ANALYZE_REQUEST_TIMEOUT_MS,
-    );
-    let res: Response;
-    try {
-      res = await fetch(url, { ...init, signal: controller.signal });
-    } catch (err) {
-      clearTimeout(timeout);
-      const name = err instanceof Error ? err.name : "";
-      if (name === "AbortError") {
-        if (i === attempts - 1) throw new Error("AI_TIMEOUT");
-        await sleep(300 * 2 ** i);
-        continue;
-      }
-      if (i === attempts - 1) throw err;
-      await sleep(300 * 2 ** i);
-      continue;
-    } finally {
-      clearTimeout(timeout);
-    }
-    if (res.ok) return res;
-    lastRes = res;
-    if (!RETRYABLE_STATUS.has(res.status) || i === attempts - 1) return res;
-
-    const retryAfter = Number(res.headers.get("retry-after") ?? "0");
-    const baseBackoff = res.status === 503 ? 1200 : 300;
-    const backoff = retryAfter > 0 ? retryAfter * 1000 : baseBackoff * 2 ** i;
-    await sleep(backoff);
-  }
-  return lastRes ?? (await fetch(url, init));
-}
-
-function extractProviderHttpStatus(message: string): number | null {
-  const m = message.match(/(?:GEMINI_HTTP_|OPENAI_HTTP_)(\d{3})/);
-  if (!m) return null;
-  const status = Number(m[1]);
-  return Number.isFinite(status) ? status : null;
-}
-
-function isTransientAiError(message: string) {
-  if (/AI_TIMEOUT|EMPTY_RESPONSE|ANALYZE_PARSE_FAILED/i.test(message))
-    return true;
-  const status = extractProviderHttpStatus(message);
-  return status !== null && RETRYABLE_STATUS.has(status);
-}
-
-async function callGemini(prompt: string, model: string): Promise<string> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("GEMINI_API_KEY is missing");
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
-  const res = await fetchWithRetry(
-    url,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.1,
-          maxOutputTokens: 900,
-          // Strongly constrain structure to reduce parse failures.
-          responseSchema: {
-            type: "object",
-            properties: {
-              algorithm: { type: "string" },
-              display_name: { type: "string" },
-              strategy: { type: "string" },
-              tags: { type: "array", items: { type: "string" } },
-              detected_data_structures: {
-                type: "array",
-                items: { type: "string" },
-              },
-              detected_algorithms: { type: "array", items: { type: "string" } },
-              summary: { type: "string" },
-              graph_mode: { type: "string" },
-              graph_var_name: { type: "string" },
-              graph_representation: { type: "string" },
-              uses_bitmasking: { type: "boolean" },
-              time_complexity: { type: "string" },
-              key_vars: { type: "array", items: { type: "string" } },
-              var_mapping: { type: "object" },
-              linear_pivots: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    var_name: { type: "string" },
-                    badge: { type: "string" },
-                    indexes_1d_var: { type: "string" },
-                    pivot_mode: {
-                      type: "string",
-                      enum: ["index", "value_in_array"],
-                    },
-                  },
-                  required: ["var_name"],
-                },
-              },
-              linear_context_var_names: {
-                type: "array",
-                items: { type: "string" },
-              },
-            },
-            required: [
-              "algorithm",
-              "display_name",
-              "strategy",
-              "tags",
-              "key_vars",
-              "var_mapping",
-            ],
-          },
+// Gemini responseSchema for analyze (structured output reduces parse failures)
+const ANALYZE_GEMINI_SCHEMA: object = {
+  type: "object",
+  properties: {
+    algorithm:                { type: "string" },
+    display_name:             { type: "string" },
+    strategy:                 { type: "string" },
+    tags:                     { type: "array", items: { type: "string" } },
+    detected_data_structures: { type: "array", items: { type: "string" } },
+    detected_algorithms:      { type: "array", items: { type: "string" } },
+    summary:                  { type: "string" },
+    graph_mode:               { type: "string" },
+    graph_var_name:           { type: "string" },
+    graph_representation:     { type: "string" },
+    uses_bitmasking:          { type: "boolean" },
+    time_complexity:          { type: "string" },
+    key_vars:                 { type: "array", items: { type: "string" } },
+    var_mapping:              { type: "object" },
+    linear_pivots: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          var_name:       { type: "string" },
+          badge:          { type: "string" },
+          indexes_1d_var: { type: "string" },
+          pivot_mode:     { type: "string", enum: ["index", "value_in_array"] }
         },
-      }),
+        required: ["var_name"]
+      }
     },
-    1,
-  );
-  if (!res.ok) {
-    let detail = "";
-    try {
-      detail = await res.text();
-    } catch {
-      detail = "";
-    }
-    throw new Error(
-      `GEMINI_HTTP_${res.status}${detail ? `:${detail.slice(0, 300)}` : ""}`,
-    );
-  }
-  const json = await res.json();
-  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("GEMINI_EMPTY_RESPONSE");
-  return String(text);
-}
-
-async function callOpenAI(prompt: string, model: string): Promise<string> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY is missing");
-  const res = await fetchWithRetry(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.1,
-        messages: [
-          {
-            role: "system",
-            content: "Return ONLY strict JSON.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    },
-    1,
-  );
-  if (!res.ok) {
-    let detail = "";
-    try {
-      detail = await res.text();
-    } catch {
-      detail = "";
-    }
-    throw new Error(
-      `OPENAI_HTTP_${res.status}${detail ? `:${detail.slice(0, 300)}` : ""}`,
-    );
-  }
-  const json = await res.json();
-  const text = json?.choices?.[0]?.message?.content;
-  if (!text) throw new Error("OPENAI_EMPTY_RESPONSE");
-  return String(text);
-}
+    linear_context_var_names: { type: "array", items: { type: "string" } }
+  },
+  required: ["algorithm", "display_name", "strategy", "tags", "key_vars", "var_mapping"]
+};
 
 function parseLinearPivots(
   raw: unknown,
@@ -647,10 +498,10 @@ function applyGraphModeInference(
 async function analyzeWithAi(
   code: string,
   varTypes: Record<string, string>,
-  language = "python",
+  language = "python"
 ) {
-  const providers = availableProviders();
-  if (providers.length === 0) throw new Error("NO_AI_PROVIDER_KEY");
+  const chain = buildChain();
+  if (chain.length === 0) throw new Error("NO_AI_PROVIDER_KEY");
   const compactCode = compactCodeForAnalyze(code);
   const compactTypes = compactVarTypes(varTypes);
 
@@ -679,7 +530,11 @@ async function analyzeWithAi(
     "dict로 정점→이웃 목록이면 graph_representation=MAP. graph_var_name은 '그래프 자료구조'로 쓰인 변수 하나만.",
     "변수명이 graph라도 보드 게임 격자만 담으면 GRAPH 전략이 아님. 이름이 dp여도 인접 리스트로만 쓰이면 GRAPH일 수 있음(드묾)—맥락이 우선.",
     "【격자 맵·미로·타일】board[r][c]에 '#', '.', 숫자·문자 타일만 있고 (dr,dc)로 4방/8방 이동·BFS/DFS·visited·키/문 비트마스크만 쓰면 strategy는 GRID 또는 GRID_LINEAR. graph_var_name은 비우고, board/map/maze/field를 GRAPH 패널(var_mapping)에 넣지 말 것 — 그것은 셀 격자이지 인접리스트 그래프가 아님.",
-    "GRAPH·graph_var_name은 정점 번호 기반 인접리스트/딕트/간선 집합 등 '정점·간선' 모델에만. 2D 맵 배열을 그래프 전략으로 분류하지 말 것.",
+    "GRAPH·graph_var_name은 정점 번호 기반 인접리스트/딕트/간선 집합 등 ‘정점·간선’ 모델에만. 2D 맵 배열을 그래프 전략으로 분류하지 말 것.",
+    "3차원 배열(list3d)은 기본적으로 GRAPH가 아니다. visited[y][x][z], dp[y][x][z], cost[y][x][z]처럼 상태공간/DP 텐서로 쓰이면 GRID_LINEAR 또는 GRID로 분류하고 graph_var_name에 넣지 말 것.",
+    "좌표 축 표기는 x,y,z를 따른다. 1D 인덱스=i 대신 x, 2D는 (y,x), 3D는 (y,x,z) 맥락으로 이해해 key_vars/summary/var_mapping을 작성한다(변수명 자체를 강제하라는 뜻이 아님, 역할 해석 기준).",
+    "dirs/DIRS/delta처럼 방향 벡터 목록 [(1,0),(-1,0),(0,1),(0,-1)] 은 GRID/GRAPH 본체가 아니라 정적 보조 변수다. var_mapping panel은 VARIABLES로 두고, 2D 격자로 오인해 GRID 패널에 배치하지 말 것.",
+    "3D 배열 시각화 설명은 slice 기준으로 작성: xy(z=k), yz(x=k), xz(y=k)처럼 축 고정 슬라이스 관점. 그래프 토글 대상으로 안내하지 말 것.",
     "",
     "비트마스킹(<<, >>, &, |, ^, mask state DP 등) 사용 시 uses_bitmasking=true로 반환.",
     "가중치 그래프(예: graph = [[]...], graph[u].append([cost, v]) / (v, w) / edges with weight)는 반드시 GRAPH로 분류.",
@@ -712,24 +567,18 @@ async function analyzeWithAi(
     `[varTypes]\n${JSON.stringify(compactTypes)}`,
   ].join("\n");
 
-  const geminiModel =
-    process.env.ANALYZE_MODEL_GEMINI ||
-    (process.env.ANALYZE_MODEL &&
-    !/^gpt|^o[1-9]/i.test(process.env.ANALYZE_MODEL)
-      ? process.env.ANALYZE_MODEL
-      : "") ||
-    "gemini-2.5-flash-lite";
-  const openaiModel =
-    process.env.ANALYZE_MODEL_OPENAI ||
-    (process.env.ANALYZE_MODEL &&
-    /^gpt|^o[1-9]/i.test(process.env.ANALYZE_MODEL)
-      ? process.env.ANALYZE_MODEL
-      : "") ||
-    "gpt-4o-mini";
+  const geminiOpts: GeminiOptions = {
+    responseSchema: ANALYZE_GEMINI_SCHEMA,
+    maxOutputTokens: 900
+  };
 
   const parseAndPostProcess = (raw: string) => {
     const parsed = tryParseAnalyzeJson(raw);
-    if (!parsed) throw new Error("ANALYZE_PARSE_FAILED");
+    if (!parsed) {
+      const preview = stripCodeFence(raw).slice(0, 500);
+      console.error("[/api/analyze] parse failed raw preview:", preview);
+      throw new Error("ANALYZE_PARSE_FAILED");
+    }
     const normalized = normalizeResponse(parsed, varTypes);
     const withPartitionPivots = enrichAnalyzeMetadataWithPartitionValuePivots(
       normalized,
@@ -745,42 +594,8 @@ async function analyzeWithAi(
     return applyGraphModeInference(guarded, code);
   };
 
-  const geminiCandidates = uniq([
-    geminiModel,
-    "gemini-2.5-flash-lite",
-    "gemini-2.0-flash",
-  ]);
-
-  const providerOrder: Array<"gemini" | "openai"> = [];
-  if (providers.includes("gemini")) providerOrder.push("gemini");
-  if (providers.includes("openai")) providerOrder.push("openai");
-
-  let lastError: Error | null = null;
-  for (const provider of providerOrder) {
-    try {
-      if (provider === "gemini") {
-        for (const model of geminiCandidates) {
-          try {
-            const raw = await callGemini(prompt, model);
-            return parseAndPostProcess(raw);
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            lastError = err instanceof Error ? err : new Error(message);
-            if (!isTransientAiError(message)) break;
-          }
-        }
-      } else {
-        const raw = await callOpenAI(prompt, openaiModel);
-        return parseAndPostProcess(raw);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      lastError = err instanceof Error ? err : new Error(message);
-      if (!isTransientAiError(message)) break;
-    }
-  }
-
-  throw lastError ?? new Error("ANALYZE_UNKNOWN_FAILURE");
+  const raw = await callWithFallback(prompt, chain, geminiOpts);
+  return parseAndPostProcess(raw);
 }
 
 function fallbackAnalyzeMetadata(
@@ -845,11 +660,12 @@ function fallbackAnalyzeMetadata(
 export async function POST(req: NextRequest) {
   let code = "";
   let varTypes: Record<string, string> = {};
+  let language = "python";
   try {
     const body = await req.json();
     code = String(body?.code ?? "");
     varTypes = (body?.varTypes ?? {}) as Record<string, string>;
-    const language = String(body?.language ?? "python");
+    language = String(body?.language ?? "python");
     // console.log(
     //   "[POST /api/analyze] Input - language:",
     //   language,
@@ -875,7 +691,7 @@ export async function POST(req: NextRequest) {
       "Stack:",
       error instanceof Error ? error.stack : "",
     );
-    return NextResponse.json(fallbackAnalyzeMetadata(varTypes), {
+    return NextResponse.json(fallbackAnalyzeMetadata(varTypes, code, language), {
       status: 200,
     });
   }

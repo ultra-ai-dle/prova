@@ -58,8 +58,9 @@ export class ProvaRuntime {
   }
 
   private workerUrl(): string {
-    if (this.language === "javascript") return "/worker/js.worker.js";
-    return "/worker/pyodide.worker.js";
+    const version = encodeURIComponent(provaRuntimeConfig.workerScriptVersion);
+    if (this.language === "javascript") return `/worker/js.worker.js?v=${version}`;
+    return `/worker/pyodide.worker.js?v=${version}`;
   }
 
   private createWorker() {
