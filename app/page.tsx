@@ -348,8 +348,9 @@ export default function Page() {
     const tags = displayTags.length > 0 ? displayTags : (metadata.tags ?? []);
     const hasGraphTag = tags.some((tag) => /그래프|graph|dfs|bfs|dijkstra|prim|kruskal|인접/i.test(tag));
     const hasGridTag = tags.some((tag) => /grid|2d|행렬|격자|matrix/i.test(tag));
-    if (hasGraphTag) return "GRAPH" as const;
+    // grid 신호가 함께 있으면 graph 태그보다 우선한다 (grid BFS/DFS 오분류 방지)
     if (hasGridTag) return "GRID" as const;
+    if (hasGraphTag) return "GRAPH" as const;
     return metadata.strategy;
   }, [metadata, displayTags]);
   const shouldUseGraphPanel = useMemo(() => {
@@ -696,6 +697,10 @@ export default function Page() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      const isThreeNavContext = !!activeEl?.closest?.("[data-prova-3d-nav='true']");
+      if (isThreeNavContext) return;
+
       const target = e.target as HTMLElement | null;
       const isTypingContext =
         !!target &&
@@ -1123,10 +1128,23 @@ export default function Page() {
                   bitWidth={bitWidth}
                   linearPivots={metadata?.linear_pivots}
                   linearContextVarNames={metadata?.linear_context_var_names}
+                  playbackControls={{
+                    isPlaying: playback.isPlaying,
+                    currentStep: playback.currentStep,
+                    totalSteps: mergedTrace.length,
+                    playbackSpeed: playback.playbackSpeed,
+                    disabled: isRunning || mergedTrace.length === 0,
+                    onPrev: () => setCurrentStep(playback.currentStep - 1),
+                    onNext: () => setCurrentStep(playback.currentStep + 1),
+                    onTogglePlay: () => setPlaying(!playback.isPlaying),
+                    onSeek: (step) => setCurrentStep(step),
+                    onSpeedChange: (speed) => setSpeed(speed)
+                  }}
                 />
               ) : (
                 <GridLinearPanel
                   step={currentStep}
+                  traceSteps={mergedTrace}
                   previousStep={previousStep}
                   fallback={isFallback}
                   strategy={effectiveStrategy}
@@ -1135,6 +1153,18 @@ export default function Page() {
                   linearPivots={metadata?.linear_pivots}
                   linearContextVarNames={metadata?.linear_context_var_names}
                   linearArrayVarName={linearArrayVarName}
+                  playbackControls={{
+                    isPlaying: playback.isPlaying,
+                    currentStep: playback.currentStep,
+                    totalSteps: mergedTrace.length,
+                    playbackSpeed: playback.playbackSpeed,
+                    disabled: isRunning || mergedTrace.length === 0,
+                    onPrev: () => setCurrentStep(playback.currentStep - 1),
+                    onNext: () => setCurrentStep(playback.currentStep + 1),
+                    onTogglePlay: () => setPlaying(!playback.isPlaying),
+                    onSeek: (step) => setCurrentStep(step),
+                    onSpeedChange: (speed) => setSpeed(speed)
+                  }}
                 />
               )}
             </div>

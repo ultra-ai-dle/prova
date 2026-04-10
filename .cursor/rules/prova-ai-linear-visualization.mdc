@@ -9,7 +9,10 @@ alwaysApply: true
 
 - **2D 타일 맵**(미로, `board[i][j]`에 `#`·`.`·문자, BFS/DFS·4방 이동)은 **GRID/GRID_LINEAR**다. `graph_var_name`·`var_mapping`의 GRAPH 패널에 `board`/`map` 등을 넣지 않는다 — AI 분석 프롬프트(`app/api/analyze/route.ts`)에 명시됨.
 - **GRAPH**는 인접 리스트·정점 간선 모델 등에만 쓴다.
+- **3D 상태 배열**(`visited[y][x][z]`, `dp[y][x][z]`)도 기본은 GRAPH가 아니라 GRID/GRID_LINEAR이다.
+- **방향 벡터 리스트**(`dirs`, `DIRS`, `delta`: `[(1,0),(-1,0),(0,1),(0,-1)]`)는 GRID/GRAPH 본체가 아닌 정적 변수다. GRID 셀로 펼치지 말고 변수 표시로 유지한다.
 - **클라이언트 `GraphPanel`**: 2D 스칼라 격자는 `is2DRectangularCellGrid` 등으로 **ARRAY2D(격자)** 우선; 메타가 잘못 GRAPH여도 격자 후보는 기본 **GRID** 뷰를 선호한다.
+- **그래프 토글 제한**: `visited[y][x][z]` 같은 3D 상태 텐서와 방향 벡터 리스트는 GRAPH 토글을 제공하지 않는다(항상 GRID/VARIABLES 맥락).
 
 ## 원칙
 
@@ -19,6 +22,8 @@ alwaysApply: true
   - **`value_in_array`**: 런타임 값이 **원소 값**이며, `indexes_1d_var`가 가리키는 배열에서 **그 값과 같은 첫 칸**에 링·배지(퀵소트 피벗 등). **이름이 `pivot`인지와 무관**—맥락으로만 채움.
 - **`indexes_1d_var`**: 여러 1D 배열이 있으면 어느 줄에 그릴지 명시. 단일 1D면 생략 가능.
 - **`linear_context_var_names`**: 스텝 요약에 보일 스칼라 변수명.
+- **좌표 표기 통일**: 1D=`x`, 2D=`y,x`, 3D=`y,x,z`로 보여준다(라벨/툴팁/UI 카피 기준).
+- **3D 표시 기본**: 슬라이스 뷰(`xy(z=k)`, `yz(x=k)`, `xz(y=k)`)를 기본으로 하고, Three.js는 보조 뷰로 둔다.
 
 ## 구현 시
 

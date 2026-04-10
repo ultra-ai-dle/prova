@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 import { LinearPivotSpec, MergedTraceStep } from "@/types/prova";
+import { ThreeDVolumePanel } from "@/features/visualization/ThreeDVolumePanel";
 import {
   formatLinearAlgoContext,
   pointersAtIndexFromSpecs,
@@ -20,6 +21,18 @@ type Props = {
   /** AI 분석: 선형 인덱스(투포인터 등) — 클라이언트는 이름 추측하지 않음 */
   linearPivots?: LinearPivotSpec[];
   linearContextVarNames?: string[];
+  playbackControls?: {
+    isPlaying: boolean;
+    currentStep: number;
+    totalSteps: number;
+    playbackSpeed: number;
+    disabled: boolean;
+    onPrev: () => void;
+    onNext: () => void;
+    onTogglePlay: () => void;
+    onSeek: (step: number) => void;
+    onSpeedChange: (speed: number) => void;
+  };
 };
 
 type GraphNode = { id: string; label: string };
@@ -344,6 +357,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 function formatScalar(value: unknown, bitmaskMode = false, bitWidth = 1) {
   if (value == null) return "null";
+  if (value === "True" || value === "true") return "T";
+  if (value === "False" || value === "false") return "F";
   if (typeof value === "string") return value.length > 26 ? `${value.slice(0, 26)}…` : value;
   if (typeof value === "number") {
     if (bitmaskMode && Number.isInteger(value) && value >= 0) {
@@ -351,7 +366,7 @@ function formatScalar(value: unknown, bitmaskMode = false, bitWidth = 1) {
     }
     return String(value);
   }
-  if (typeof value === "boolean") return String(value);
+  if (typeof value === "boolean") return value ? "T" : "F";
   return String(value);
 }
 function formatCompact(value: unknown, bitmaskMode = false, bitWidth = 1) {
@@ -369,7 +384,7 @@ function toJsonLike(value: unknown, depth = 0, bitmaskMode = false, bitWidth = 1
     }
     return String(value);
   }
-  if (typeof value === "boolean") return String(value);
+  if (typeof value === "boolean") return value ? "T" : "F";
   if (typeof value === "string") return JSON.stringify(value);
   if (Array.isArray(value)) {
     if (value.length === 0) return "[]";
@@ -396,7 +411,7 @@ function toJsonCompact(value: unknown, bitmaskMode = false, bitWidth = 1): strin
     }
     return String(value);
   }
-  if (typeof value === "boolean") return String(value);
+  if (typeof value === "boolean") return value ? "T" : "F";
   if (typeof value === "string") return JSON.stringify(value);
   if (Array.isArray(value)) {
     return `[${value.map((v) => toJsonCompact(v, bitmaskMode, bitWidth)).join(", ")}]`;
@@ -534,6 +549,18 @@ function isDirectionVectorTuple(value: unknown): boolean {
     && typeof value[1] === "number";
 }
 
+function isDirectionVectorListLike(value: unknown): value is unknown[][] {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.length <= 16
+    && (value as unknown[]).every((row) => isDirectionVectorTuple(row));
+}
+
+function formatDirectionVectorList(value: unknown[][]): string {
+  const body = value.map((row) => `(${String(row[0])}, ${String(row[1])})`).join(", ");
+  return `[${body}]`;
+}
+
 function isDirectionMapLike(name: string, value: unknown): boolean {
   if (!isPlainObject(value)) return false;
   if (!/dir|dirs|direction|delta|move|step/i.test(name)) return false;
@@ -546,6 +573,51 @@ function canGraphLikeUseGridView(value: unknown): boolean {
   if (!Array.isArray(value)) return false;
   if (value.length === 0) return false;
   return value.every((row) => Array.isArray(row));
+}
+
+function is3DBooleanStateGrid(value: unknown): value is unknown[][][] {
+  if (!Array.isArray(value) || value.length === 0) return false;
+  if (!value.every((row) => Array.isArray(row) && row.length > 0)) return false;
+  const rows = value as unknown[][];
+  if (!rows.every((row) => row.every((cell) => Array.isArray(cell)))) return false;
+  const sample = (rows[0]?.[0] as unknown[]) ?? [];
+  if (sample.length === 0) return false;
+  const isBoolish = (v: unknown) =>
+    typeof v === "boolean"
+    || (typeof v === "number" && Number.isFinite(v))
+    || (typeof v === "string" && /^(true|false|t|f|0|1)$/i.test(v.trim()));
+  return rows.every((row) => row.every((cell) => (cell as unknown[]).every(isBoolish)));
+}
+
+function is2DBitmaskGrid(value: unknown): value is number[][] {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.every(
+      (row) => Array.isArray(row)
+        && row.length > 0
+        && (row as unknown[]).every(
+          (cell) => typeof cell === "number" && Number.isInteger(cell) && cell >= 0
+        )
+    );
+}
+
+function inferBitWidthFromGrid(grid: number[][], fallback = 1, cap = 64) {
+  let maxValue = 0;
+  for (const row of grid) {
+    for (const cell of row) {
+      if (cell > maxValue) maxValue = cell;
+    }
+  }
+  const inferred = maxValue > 0 ? Math.floor(Math.log2(maxValue)) + 1 : 1;
+  return Math.max(1, Math.min(cap, Math.max(fallback, inferred)));
+}
+
+function expand2DBitmaskGridTo3D(grid: number[][], bits: number): unknown[][][] {
+  return grid.map((row) =>
+    row.map((mask) =>
+      Array.from({ length: bits }, (_, z) => Boolean(mask & (1 << z)))
+    )
+  );
 }
 
 function buildGraphFromValue(candidate: unknown) {
@@ -962,7 +1034,8 @@ export function GraphPanel({
   bitmaskMode = false,
   bitWidth = 1,
   linearPivots,
-  linearContextVarNames
+  linearContextVarNames,
+  playbackControls
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const positionRef = useRef<Map<string, { x: number; y: number; vx?: number; vy?: number }>>(new Map());
@@ -1008,6 +1081,8 @@ export function GraphPanel({
       .map(([key, value]) => {
         const kind = isDirectionMapLike(key, value)
           ? "OBJECT"
+          : isDirectionVectorListLike(value)
+            ? "OBJECT"
           : isClearlyGridLike(value)
             ? "ARRAY2D"
           : looksLike2DScalarTableGrid(value)
@@ -1083,14 +1158,28 @@ export function GraphPanel({
         {/* Structure regions */}
         <div className="space-y-2">
           {parsed.structures.map((structure) => {
-            const canToggleGraphGrid = structure.kind === "GRAPHLIKE" && canGraphLikeUseGridView(structure.value);
+            const promoted3D =
+              bitmaskMode && is2DBitmaskGrid(structure.value)
+                ? expand2DBitmaskGridTo3D(
+                    structure.value as number[][],
+                    inferBitWidthFromGrid(structure.value as number[][], bitWidth, 64)
+                  )
+                : null;
+            const lockGridOnly =
+              is3DBooleanStateGrid(structure.value) ||
+              !!promoted3D ||
+              isDirectionVectorListLike(structure.value);
+            const canToggleGraphGrid =
+              structure.kind === "GRAPHLIKE" && canGraphLikeUseGridView(structure.value) && !lockGridOnly;
             const preferGridDefault =
               looksLike2DScalarTableGrid(structure.value) ||
               isClearlyGridLike(structure.value) ||
               is2DRectangularCellGrid(structure.value);
             const default2dMode =
               parsed.graphKeys.has(structure.key) && !preferGridDefault ? "GRAPH" : "GRID";
-            const resolvedMode = !canToggleGraphGrid && structure.kind === "GRAPHLIKE"
+            const resolvedMode = lockGridOnly
+              ? "GRID"
+              : !canToggleGraphGrid && structure.kind === "GRAPHLIKE"
               ? "GRAPH"
               : (array2DModeByVar[structure.key] ?? default2dMode);
             return (
@@ -1125,6 +1214,22 @@ export function GraphPanel({
               ) : (structure.kind === "ARRAY2D" || structure.kind === "GRAPHLIKE") ? (
                 <div className="overflow-auto">
                   {(() => {
+                    if (is3DBooleanStateGrid(structure.value) || promoted3D) {
+                      const fk = typeof vars.nk === "number"
+                        ? vars.nk
+                        : (typeof vars.k === "number" ? vars.k : 0);
+                      return (
+                        <ThreeDVolumePanel
+                          name={structure.key}
+                          volume={(promoted3D ?? structure.value) as unknown[][][]}
+                          traceSteps={traceSteps}
+                          focusIndex={fk}
+                          bitmaskMode={bitmaskMode}
+                          bitWidth={bitWidth}
+                          playbackControls={playbackControls}
+                        />
+                      );
+                    }
                     const grid = to2D(structure.value);
                     const maxCols = Math.max(1, ...grid.map((r) => r.length));
                     const positiveMax = getPositiveMaxInGrid(grid);
@@ -1138,12 +1243,12 @@ export function GraphPanel({
                     <div />
                     {Array.from({ length: maxCols }, (_, c) => (
                       <div key={`${structure.key}-head-c-${c}`} className="text-[10px] text-prova-muted text-center font-mono">
-                        c{c}
+                        x{c}
                       </div>
                     ))}
                     {grid.map((row, r) => (
                       <div key={`${structure.key}-row-${r}`} className="contents">
-                        <div className="text-[10px] text-prova-muted text-right pr-1 font-mono self-center">r{r}</div>
+                        <div className="text-[10px] text-prova-muted text-right pr-1 font-mono self-center">y{r}</div>
                         {Array.from({ length: maxCols }, (_, c) => (
                           <div
                             key={`${structure.key}-c-${r}-${c}`}
@@ -1182,7 +1287,7 @@ export function GraphPanel({
                       const ringExtra = ptrs[0]?.ringClass ?? "";
                       return (
                         <div key={`${structure.key}-slot-${i}`} className="flex flex-col items-center gap-0.5 min-w-[34px]">
-                          <div className="text-[10px] text-prova-muted font-mono tabular-nums">{i}</div>
+                          <div className="text-[10px] text-prova-muted font-mono tabular-nums">x{i}</div>
                           <div
                             className={`min-w-8 h-8 px-1 rounded border text-[11px] font-mono grid place-items-center transition-all duration-150 ${
                               hasValue
@@ -1214,7 +1319,11 @@ export function GraphPanel({
                 </div>
               ) : (
                 <div className="rounded border border-[#2d4f79] bg-[#0f1f33] p-2 overflow-auto">
-                  {isPlainObject(structure.value) ? (
+                  {isDirectionVectorListLike(structure.value) ? (
+                    <pre className="rounded border border-[#27496f] bg-[#0d1a2a] px-3 py-2 text-[11px] leading-5 font-mono text-[#c9d1d9] whitespace-pre overflow-auto">
+                      {formatDirectionVectorList(structure.value)}
+                    </pre>
+                  ) : isPlainObject(structure.value) ? (
                     <pre className="rounded border border-[#27496f] bg-[#0d1a2a] px-3 py-2 text-[11px] leading-5 font-mono text-[#c9d1d9] whitespace-pre overflow-auto">
                       {toJsonPreferSingleLine(
                         Object.fromEntries(

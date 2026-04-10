@@ -10,6 +10,7 @@ import {
 
 type Props = {
   step: MergedTraceStep | null;
+  traceSteps?: MergedTraceStep[];
   fallback: boolean;
   previousStep: MergedTraceStep | null;
   strategy?: "GRID" | "LINEAR" | "GRID_LINEAR" | "GRAPH";
@@ -19,6 +20,18 @@ type Props = {
   linearContextVarNames?: string[];
   /** var_mapping 등에서 온 1차원 배열 변수명 (없으면 첫 1D 배열로 폴백) */
   linearArrayVarName?: string;
+  playbackControls?: {
+    isPlaying: boolean;
+    currentStep: number;
+    totalSteps: number;
+    playbackSpeed: number;
+    disabled: boolean;
+    onPrev: () => void;
+    onNext: () => void;
+    onTogglePlay: () => void;
+    onSeek: (step: number) => void;
+    onSpeedChange: (speed: number) => void;
+  };
 };
 
 function is2DArray(value: unknown): value is unknown[][] {
@@ -48,6 +61,44 @@ function getFirst3DVar(step: MergedTraceStep) {
   if (dpFirst) return { name: dpFirst[0], value: dpFirst[1] as unknown[][][] };
   const entry = entries.find(([, value]) => isScalar3DArray(value));
   return entry ? { name: entry[0], value: entry[1] as unknown[][][] } : null;
+}
+
+function is2DBitmaskGrid(value: unknown): value is number[][] {
+  return is2DArray(value)
+    && (value as unknown[][]).every((row) =>
+      row.every(
+        (cell) => typeof cell === "number" && Number.isInteger(cell) && cell >= 0
+      )
+    );
+}
+
+function bitWidthFromGrid(grid: number[][], fallback = 1, cap = 64) {
+  let maxValue = 0;
+  for (const row of grid) {
+    for (const cell of row) {
+      if (cell > maxValue) maxValue = cell;
+    }
+  }
+  const inferred = maxValue > 0 ? Math.floor(Math.log2(maxValue)) + 1 : 1;
+  return Math.max(1, Math.min(cap, Math.max(fallback, inferred)));
+}
+
+function expand2DBitmaskGridTo3D(grid: number[][], bits: number): unknown[][][] {
+  return grid.map((row) =>
+    row.map((mask) =>
+      Array.from({ length: bits }, (_, k) => Boolean(mask & (1 << k)))
+    )
+  );
+}
+
+function getBitmaskGridAs3DVar(step: MergedTraceStep, bitWidth = 1) {
+  const entries = Object.entries(step.vars);
+  const candidate = entries.find(([, value]) => is2DBitmaskGrid(value));
+  if (!candidate) return null;
+  const [name, value] = candidate;
+  const grid = value as number[][];
+  const width = bitWidthFromGrid(grid, bitWidth, 64);
+  return { name, value: expand2DBitmaskGridTo3D(grid, width) };
 }
 
 function getFirst2DVar(step: MergedTraceStep) {
@@ -101,7 +152,7 @@ function formatCellValue(value: unknown, bitmaskMode = false, bitWidth = 1) {
     }
     return String(value);
   }
-  if (typeof value === "boolean") return String(value);
+  if (typeof value === "boolean") return value ? "T" : "F";
   if (typeof value === "string") return value.length > 8 ? `${value.slice(0, 8)}…` : value;
   if (Array.isArray(value)) return `[${value.length}]`;
   if (typeof value === "object") return "{...}";
@@ -129,6 +180,7 @@ const GridIcon = () => (
 
 export function GridLinearPanel({
   step,
+  traceSteps = [],
   fallback,
   previousStep,
   strategy,
@@ -136,7 +188,8 @@ export function GridLinearPanel({
   bitWidth = 1,
   linearPivots,
   linearContextVarNames,
-  linearArrayVarName
+  linearArrayVarName,
+  playbackControls
 }: Props) {
   if (!step) {
     return (
@@ -199,8 +252,15 @@ export function GridLinearPanel({
 
   const gridVar = getFirst2DVar(step);
   const previousGridVar = previousStep ? getFirst2DVar(previousStep) : null;
-  const grid3DVar = getFirst3DVar(step);
-  const prev3DVar = previousStep ? getFirst3DVar(previousStep) : null;
+  const native3DVar = getFirst3DVar(step);
+  const nativePrev3DVar = previousStep ? getFirst3DVar(previousStep) : null;
+  // IMPORTANT: do not infer by variable names; convert only by runtime structure + mode.
+  const bitmask3DVar =
+    !native3DVar && bitmaskMode ? getBitmaskGridAs3DVar(step, bitWidth) : null;
+  const bitmaskPrev3DVar =
+    !native3DVar && bitmaskMode && previousStep ? getBitmaskGridAs3DVar(previousStep, bitWidth) : null;
+  const grid3DVar = native3DVar ?? bitmask3DVar;
+  const prev3DVar = native3DVar ? nativePrev3DVar : bitmaskPrev3DVar;
   const focusIndex = typeof step.vars.nk === "number"
     ? step.vars.nk
     : (typeof step.vars.k === "number" ? step.vars.k : 0);
@@ -259,9 +319,11 @@ export function GridLinearPanel({
           name={grid3DVar.name}
           volume={grid3DVar.value}
           prevVolume={prev3DVar && prev3DVar.name === grid3DVar.name ? prev3DVar.value : null}
+          traceSteps={traceSteps}
           focusIndex={focusIndex}
           bitmaskMode={bitmaskMode}
           bitWidth={bitWidth}
+          playbackControls={playbackControls}
         />
       )}
 
@@ -276,12 +338,12 @@ export function GridLinearPanel({
               <div />
               {Array.from({ length: (gridVar?.value?.[0] ?? []).length || 0 }, (_, c) => (
                 <div key={`col-${c}`} className="text-[10px] text-prova-muted text-center font-mono">
-                  c{c}
+                  x{c}
                 </div>
               ))}
               {Array.from({ length: gridVar?.value?.length || 0 }, (_, r) => (
                 <div key={`row-wrap-${r}`} className="contents">
-                  <div className="text-[10px] text-prova-muted text-right pr-1 font-mono self-center">r{r}</div>
+                  <div className="text-[10px] text-prova-muted text-right pr-1 font-mono self-center">y{r}</div>
                   {Array.from({ length: (gridVar?.value?.[0] ?? []).length || 0 }, (_, c) => {
                     const idx = r * ((gridVar?.value?.[0] ?? []).length || 1) + c;
                     const cell = cells[idx];
@@ -347,12 +409,14 @@ export function GridLinearPanel({
                 const ring = ptrs[0]?.ringClass ?? "";
                 return (
                   <div key={`lin-${i}`} className="flex flex-col items-center gap-0.5 shrink-0 min-w-[34px]">
-                    <div className="text-[10px] text-prova-muted font-mono tabular-nums">{i}</div>
+                    <div className="text-[10px] text-prova-muted font-mono tabular-nums">x{i}</div>
                     <div
                       className={`min-w-8 h-8 px-1 rounded border text-[11px] font-mono grid place-items-center border-[#2d4f79] bg-[#11243d] text-[#c9d1d9] transition-all ${ring}`}
                     >
                       {typeof item === "number" && bitmaskMode && Number.isInteger(item) && item >= 0
                         ? item.toString(2).padStart(Math.max(1, bitWidth), "0")
+                        : typeof item === "boolean"
+                          ? (item ? "T" : "F")
                         : typeof item === "object"
                           ? JSON.stringify(item)
                           : String(item)}
