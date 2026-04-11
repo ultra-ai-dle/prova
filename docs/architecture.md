@@ -1,0 +1,63 @@
+# Prova 아키텍처 개요
+
+## 한줄 요약
+브라우저에서 코드를 실행 → trace 수집 → AI가 분석·설명 → 시각화 렌더링하는 4단계 파이프라인.
+
+## 전체 데이터 흐름
+
+```mermaid
+flowchart TD
+    Input["코드 + stdin"] --> Worker
+
+    subgraph Worker["Worker (Pyodide / JS)"]
+        W1["실행 + trace 수집"]
+    end
+
+    Worker -- "postMessage\n{rawTrace, branchLines, varTypes}" --> Store
+
+    subgraph Store["Zustand Store"]
+        S1["setWorkerResult() → rawTrace 저장"]
+    end
+
+    Store -- "code + varTypes" --> Analyze
+    Store -- "rawTrace + metadata" --> Explain
+
+    subgraph Analyze["/api/analyze"]
+        A1["→ AnalyzeMetadata\n(strategy, var_mapping 등)"]
+    end
+
+    subgraph Explain["/api/explain"]
+        E1["→ SSE 청크 스트리밍\n(8 step/chunk)"]
+    end
+
+    Analyze --> Merge
+    Explain --> Merge
+
+    subgraph Merge["mergeTrace()"]
+        M1["rawTrace[i] + annotated[i] → mergedTrace[i]\n(미도착 청크는 EMPTY_ANNOTATED 패딩)"]
+    end
+
+    Merge --> Viz
+
+    subgraph Viz["Visualization"]
+        V1["GridLinearPanel / GraphPanel / 3D Volume\nmergedTrace[currentStep] 기준 렌더링"]
+    end
+```
+
+## 모듈 경계 요약
+
+| 경계 | 입력 | 출력 | 파일 |
+|---|---|---|---|
+| Worker → Store | postMessage | `WorkerDonePayload` | runtime.ts, *.worker.js |
+| Store → Analyze API | code + varTypes | `AnalyzeMetadata` | /api/analyze/route.ts |
+| Store → Explain API | rawTrace + metadata | `AnnotatedStep[]` (SSE) | /api/explain/route.ts |
+| Merge | raw + annotated | `MergedTraceStep[]` | trace/merge.ts |
+| Store → UI | mergedTrace[step] | 렌더링 | *Panel.tsx |
+
+## 핵심 제약
+
+- 실행 timeout: 120초 (`provaRuntime.executionTimeoutMs`)
+- trace step 상한: 10,000 (`provaRuntime.maxTraceSteps`)
+- 직렬화 깊이: 3단계, 컬렉션 크기 제한 (root: 30, nested: 128)
+- AI 청크 크기: 8 step/chunk, delta 압축
+- AI 프로바이더 폴백: 메인 → 폴백 (env 설정), 토큰 초과·일시 에러 시 자동 전환
