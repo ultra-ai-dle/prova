@@ -1,9 +1,10 @@
-import type { AnalyzeMetadata, LinearPivotSpec } from "@/types/prova";
+import type { AnalyzeMetadata, LinearPivotSpec } from '@/types/frogger';
 
-const ASSIGN_HEAD_ELEMENT = /^\s*([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*\[\s*0\s*\]/gm;
+const ASSIGN_HEAD_ELEMENT =
+  /^\s*([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*\[\s*0\s*\]/gm;
 
 function specKey(p: LinearPivotSpec): string {
-  return `${p.var_name}|${p.indexes_1d_var ?? ""}|${p.pivot_mode ?? "index"}`;
+  return `${p.var_name}|${p.indexes_1d_var ?? ''}|${p.pivot_mode ?? 'index'}`;
 }
 
 /**
@@ -12,9 +13,9 @@ function specKey(p: LinearPivotSpec): string {
  */
 function codeMayReferenceQuicksortPartition(code: string): boolean {
   const lower = code.toLowerCase();
-  if (lower.includes("quicksort")) return true;
-  if (lower.includes("quick sort")) return true;
-  if (code.includes("퀵소트") || code.includes("퀵 소트")) return true;
+  if (lower.includes('quicksort')) return true;
+  if (lower.includes('quick sort')) return true;
+  if (code.includes('퀵소트') || code.includes('퀵 소트')) return true;
   if (/def\s+quickSort\b/.test(code)) return true;
   if (/def\s+quick_sort\b/.test(code)) return true;
   if (/def\s+quick\s*sort\b/i.test(code)) return true;
@@ -28,13 +29,13 @@ function codeMayReferenceQuicksortPartition(code: string): boolean {
 export function enrichAnalyzeMetadataWithPartitionValuePivots(
   meta: AnalyzeMetadata,
   code: string,
-  varTypes: Record<string, string>
+  varTypes: Record<string, string>,
 ): AnalyzeMetadata {
   const varNames = Object.keys(varTypes);
   const fromAi =
-    /\bquick\s*sort\b/i.test(meta.algorithm ?? "")
-    || (meta.detected_algorithms ?? []).some((a) => /\bquick/i.test(a))
-    || (meta.tags ?? []).some((t) => /quick|quicksort|퀵/i.test(t));
+    /\bquick\s*sort\b/i.test(meta.algorithm ?? '') ||
+    (meta.detected_algorithms ?? []).some((a) => /\bquick/i.test(a)) ||
+    (meta.tags ?? []).some((t) => /quick|quicksort|퀵/i.test(t));
 
   if (!fromAi && !codeMayReferenceQuicksortPartition(code)) {
     return meta;
@@ -53,8 +54,8 @@ export function enrichAnalyzeMetadataWithPartitionValuePivots(
     seen.add(sig);
     toAdd.push({
       var_name: valVar,
-      pivot_mode: "value_in_array",
-      indexes_1d_var: arrVar
+      pivot_mode: 'value_in_array',
+      indexes_1d_var: arrVar,
     });
   }
   if (toAdd.length === 0) return meta;

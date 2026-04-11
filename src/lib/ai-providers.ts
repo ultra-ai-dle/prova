@@ -9,10 +9,19 @@
  * the caller should move to the next entry in the chain (cross-provider).
  */
 
-export type Provider = "gemini" | "openai" | "groq" | "anthropic" | "openrouter";
+export type Provider =
+  | 'gemini'
+  | 'openai'
+  | 'groq'
+  | 'anthropic'
+  | 'openrouter';
 
 export const PROVIDER_PRIORITY: Provider[] = [
-  "gemini", "groq", "openai", "anthropic", "openrouter"
+  'gemini',
+  'groq',
+  'openai',
+  'anthropic',
+  'openrouter',
 ];
 
 export type ChainEntry = { provider: Provider; model: string };
@@ -21,11 +30,16 @@ export type ChainEntry = { provider: Provider; model: string };
 
 export function providerKey(p: Provider): string | undefined {
   switch (p) {
-    case "gemini":     return process.env.GEMINI_API_KEY     || undefined;
-    case "openai":     return process.env.OPENAI_API_KEY     || undefined;
-    case "groq":       return process.env.GROQ_API_KEY       || undefined;
-    case "anthropic":  return process.env.ANTHROPIC_API_KEY  || undefined;
-    case "openrouter": return process.env.OPENROUTER_API_KEY || undefined;
+    case 'gemini':
+      return process.env.GEMINI_API_KEY || undefined;
+    case 'openai':
+      return process.env.OPENAI_API_KEY || undefined;
+    case 'groq':
+      return process.env.GROQ_API_KEY || undefined;
+    case 'anthropic':
+      return process.env.ANTHROPIC_API_KEY || undefined;
+    case 'openrouter':
+      return process.env.OPENROUTER_API_KEY || undefined;
   }
 }
 
@@ -35,19 +49,35 @@ export function providerKey(p: Provider): string | undefined {
 // chain[1] = FALLBACK_PROVIDER + FALLBACK_MODEL  (explicit fallback, can cross providers)
 
 export function buildChain(): ChainEntry[] {
-  const mainProvider  = (process.env.AI_PROVIDER       ?? "").trim().toLowerCase() as Provider;
-  const mainModel     = (process.env.AI_MODEL           ?? "").trim();
-  const fbProvider    = (process.env.FALLBACK_PROVIDER  ?? "").trim().toLowerCase() as Provider;
-  const fbModel       = (process.env.FALLBACK_MODEL     ?? "").trim();
+  const mainProvider = (process.env.AI_PROVIDER ?? '')
+    .trim()
+    .toLowerCase() as Provider;
+  const mainModel = (process.env.AI_MODEL ?? '').trim();
+  const fbProvider = (process.env.FALLBACK_PROVIDER ?? '')
+    .trim()
+    .toLowerCase() as Provider;
+  const fbModel = (process.env.FALLBACK_MODEL ?? '').trim();
 
   const chain: ChainEntry[] = [];
 
-  if (mainProvider && PROVIDER_PRIORITY.includes(mainProvider) && providerKey(mainProvider) && mainModel) {
+  if (
+    mainProvider &&
+    PROVIDER_PRIORITY.includes(mainProvider) &&
+    providerKey(mainProvider) &&
+    mainModel
+  ) {
     chain.push({ provider: mainProvider, model: mainModel });
   }
 
-  if (fbProvider && PROVIDER_PRIORITY.includes(fbProvider) && providerKey(fbProvider) && fbModel) {
-    const alreadyAdded = chain.some((e) => e.provider === fbProvider && e.model === fbModel);
+  if (
+    fbProvider &&
+    PROVIDER_PRIORITY.includes(fbProvider) &&
+    providerKey(fbProvider) &&
+    fbModel
+  ) {
+    const alreadyAdded = chain.some(
+      (e) => e.provider === fbProvider && e.model === fbModel,
+    );
     if (!alreadyAdded) chain.push({ provider: fbProvider, model: fbModel });
   }
 
@@ -58,8 +88,9 @@ export function buildChain(): ChainEntry[] {
 
 export function isTokenOverflow(message: string): boolean {
   if (
-    /context_length_exceeded|maximum.{0,20}context|token.{0,20}limit|too.{0,20}long|RESOURCE_EXHAUSTED|context.{0,5}window|input.{0,20}large|max_tokens|string too long/i
-      .test(message)
+    /context_length_exceeded|maximum.{0,20}context|token.{0,20}limit|too.{0,20}long|RESOURCE_EXHAUSTED|context.{0,5}window|input.{0,20}large|max_tokens|string too long/i.test(
+      message,
+    )
   ) {
     return true;
   }
@@ -86,7 +117,7 @@ export async function fetchWithRetry(
   url: string,
   init: RequestInit,
   timeoutMs = 20_000,
-  attempts = 3
+  attempts = 3,
 ): Promise<Response> {
   let lastRes: Response | null = null;
   for (let i = 0; i < attempts; i++) {
@@ -97,8 +128,8 @@ export async function fetchWithRetry(
       res = await fetch(url, { ...init, signal: controller.signal });
     } catch (err) {
       clearTimeout(tid);
-      if ((err as Error).name === "AbortError") {
-        if (i === attempts - 1) throw new Error("AI_TIMEOUT");
+      if ((err as Error).name === 'AbortError') {
+        if (i === attempts - 1) throw new Error('AI_TIMEOUT');
         await sleep(300 * 2 ** i);
         continue;
       }
@@ -111,8 +142,10 @@ export async function fetchWithRetry(
     if (res.ok) return res;
     lastRes = res;
     if (!RETRYABLE.has(res.status) || i === attempts - 1) return res;
-    const ra = Number(res.headers.get("retry-after") ?? "0");
-    await sleep(ra > 0 ? ra * 1000 : (res.status === 503 ? 1200 : 300) * 2 ** i);
+    const ra = Number(res.headers.get('retry-after') ?? '0');
+    await sleep(
+      ra > 0 ? ra * 1000 : (res.status === 503 ? 1200 : 300) * 2 ** i,
+    );
   }
   return lastRes!;
 }
@@ -129,10 +162,10 @@ export type GeminiOptions = {
 export async function callGemini(
   prompt: string,
   model: string,
-  opts: GeminiOptions = {}
+  opts: GeminiOptions = {},
 ): Promise<string> {
-  const key = providerKey("gemini");
-  if (!key) throw new Error("GEMINI_API_KEY is missing");
+  const key = providerKey('gemini');
+  if (!key) throw new Error('GEMINI_API_KEY is missing');
 
   const { responseSchema, maxOutputTokens = 1024, temperature = 0.1 } = opts;
 
@@ -141,29 +174,37 @@ export async function callGemini(
   const res = await fetchWithRetry(
     url,
     {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
-          ...(responseSchema ? { responseMimeType: "application/json", responseSchema } : {}),
+          ...(responseSchema
+            ? { responseMimeType: 'application/json', responseSchema }
+            : {}),
           temperature,
           maxOutputTokens,
         },
       }),
     },
     20_000,
-    1  // Gemini has its own internal retry; one attempt here avoids duplicate charges
+    1, // Gemini has its own internal retry; one attempt here avoids duplicate charges
   );
 
   if (!res.ok) {
-    let detail = "";
-    try { detail = await res.text(); } catch { /* ignore */ }
-    throw new Error(`GEMINI_HTTP_${res.status}${detail ? `:${detail.slice(0, 300)}` : ""}`);
+    let detail = '';
+    try {
+      detail = await res.text();
+    } catch {
+      /* ignore */
+    }
+    throw new Error(
+      `GEMINI_HTTP_${res.status}${detail ? `:${detail.slice(0, 300)}` : ''}`,
+    );
   }
   const json = await res.json();
   const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("GEMINI_EMPTY_RESPONSE");
+  if (!text) throw new Error('GEMINI_EMPTY_RESPONSE');
   return String(text);
 }
 
@@ -180,7 +221,7 @@ export async function callOpenAICompat(
   model: string,
   prompt: string,
   providerPrefix: string,
-  opts: OpenAICompatOptions = {}
+  opts: OpenAICompatOptions = {},
 ): Promise<string> {
   const { temperature = 0.1, maxTokens, jsonMode = true, extraHeaders } = opts;
 
@@ -188,32 +229,38 @@ export async function callOpenAICompat(
     model,
     temperature,
     messages: [
-      { role: "system", content: "Return ONLY strict JSON." },
-      { role: "user",   content: prompt },
+      { role: 'system', content: 'Return ONLY strict JSON.' },
+      { role: 'user', content: prompt },
     ],
   };
-  if (jsonMode) body.response_format = { type: "json_object" };
-  if (maxTokens)  body.max_tokens = maxTokens;
+  if (jsonMode) body.response_format = { type: 'json_object' };
+  if (maxTokens) body.max_tokens = maxTokens;
 
   const res = await fetchWithRetry(
     `${baseUrl}/chat/completions`,
     {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
         ...extraHeaders,
       },
       body: JSON.stringify(body),
     },
     20_000,
-    1
+    1,
   );
 
   if (!res.ok) {
-    let detail = "";
-    try { detail = await res.text(); } catch { /* ignore */ }
-    throw new Error(`${providerPrefix}_HTTP_${res.status}${detail ? `:${detail.slice(0, 300)}` : ""}`);
+    let detail = '';
+    try {
+      detail = await res.text();
+    } catch {
+      /* ignore */
+    }
+    throw new Error(
+      `${providerPrefix}_HTTP_${res.status}${detail ? `:${detail.slice(0, 300)}` : ''}`,
+    );
   }
   const json = await res.json();
   const text = json?.choices?.[0]?.message?.content;
@@ -229,42 +276,48 @@ export type AnthropicOptions = {
 export async function callAnthropic(
   prompt: string,
   model: string,
-  opts: AnthropicOptions = {}
+  opts: AnthropicOptions = {},
 ): Promise<string> {
-  const key = providerKey("anthropic");
-  if (!key) throw new Error("ANTHROPIC_API_KEY is missing");
+  const key = providerKey('anthropic');
+  if (!key) throw new Error('ANTHROPIC_API_KEY is missing');
 
   const { temperature = 0.1, maxTokens = 1024 } = opts;
 
   const res = await fetchWithRetry(
-    "https://api.anthropic.com/v1/messages",
+    'https://api.anthropic.com/v1/messages',
     {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
         temperature,
-        system: "Return ONLY strict JSON.",
-        messages: [{ role: "user", content: prompt }],
+        system: 'Return ONLY strict JSON.',
+        messages: [{ role: 'user', content: prompt }],
       }),
     },
     20_000,
-    1
+    1,
   );
 
   if (!res.ok) {
-    let detail = "";
-    try { detail = await res.text(); } catch { /* ignore */ }
-    throw new Error(`ANTHROPIC_HTTP_${res.status}${detail ? `:${detail.slice(0, 300)}` : ""}`);
+    let detail = '';
+    try {
+      detail = await res.text();
+    } catch {
+      /* ignore */
+    }
+    throw new Error(
+      `ANTHROPIC_HTTP_${res.status}${detail ? `:${detail.slice(0, 300)}` : ''}`,
+    );
   }
   const json = await res.json();
   const text = json?.content?.[0]?.text;
-  if (!text) throw new Error("ANTHROPIC_EMPTY_RESPONSE");
+  if (!text) throw new Error('ANTHROPIC_EMPTY_RESPONSE');
   return String(text);
 }
 
@@ -273,31 +326,51 @@ export async function callProvider(
   entry: ChainEntry,
   prompt: string,
   geminiOpts?: GeminiOptions,
-  openaiOpts?: OpenAICompatOptions
+  openaiOpts?: OpenAICompatOptions,
 ): Promise<string> {
   const { provider, model } = entry;
   switch (provider) {
-    case "gemini":
+    case 'gemini':
       return callGemini(prompt, model, geminiOpts);
-    case "openai": {
-      const key = providerKey("openai")!;
-      return callOpenAICompat("https://api.openai.com/v1", key, model, prompt, "OPENAI", openaiOpts);
-    }
-    case "groq": {
-      const key = providerKey("groq")!;
-      return callOpenAICompat("https://api.groq.com/openai/v1", key, model, prompt, "GROQ", openaiOpts);
-    }
-    case "anthropic":
-      return callAnthropic(prompt, model, openaiOpts);
-    case "openrouter": {
-      const key = providerKey("openrouter")!;
+    case 'openai': {
+      const key = providerKey('openai')!;
       return callOpenAICompat(
-        "https://openrouter.ai/api/v1",
+        'https://api.openai.com/v1',
         key,
         model,
         prompt,
-        "OPENROUTER",
-        { ...openaiOpts, extraHeaders: { "HTTP-Referer": "https://prova.app", "X-Title": "Prova" } }
+        'OPENAI',
+        openaiOpts,
+      );
+    }
+    case 'groq': {
+      const key = providerKey('groq')!;
+      return callOpenAICompat(
+        'https://api.groq.com/openai/v1',
+        key,
+        model,
+        prompt,
+        'GROQ',
+        openaiOpts,
+      );
+    }
+    case 'anthropic':
+      return callAnthropic(prompt, model, openaiOpts);
+    case 'openrouter': {
+      const key = providerKey('openrouter')!;
+      return callOpenAICompat(
+        'https://openrouter.ai/api/v1',
+        key,
+        model,
+        prompt,
+        'OPENROUTER',
+        {
+          ...openaiOpts,
+          extraHeaders: {
+            'HTTP-Referer': 'https://frogger.app',
+            'X-Title': 'Frogger',
+          },
+        },
       );
     }
   }
@@ -317,9 +390,9 @@ export async function callWithFallback(
   prompt: string,
   chain: ChainEntry[],
   geminiOpts?: GeminiOptions,
-  openaiOpts?: OpenAICompatOptions
+  openaiOpts?: OpenAICompatOptions,
 ): Promise<string> {
-  if (chain.length === 0) throw new Error("NO_AI_PROVIDER_KEY");
+  if (chain.length === 0) throw new Error('NO_AI_PROVIDER_KEY');
 
   let lastError: Error | null = null;
   for (const entry of chain) {
@@ -334,5 +407,5 @@ export async function callWithFallback(
       break;
     }
   }
-  throw lastError ?? new Error("AI_UNKNOWN_FAILURE");
+  throw lastError ?? new Error('AI_UNKNOWN_FAILURE');
 }

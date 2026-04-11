@@ -1,13 +1,13 @@
-# Prova 아키텍처 분석 & 다국어 확장 가이드
+# Frogger 아키텍처 분석 & 다국어 확장 가이드
 
-> Python 코드를 입력받아 알고리즘을 시각화하는 Prova의 전체 구조와, 새 언어를 추가할 때의 구현 비용을 정리한 문서입니다.
+> Python 코드를 입력받아 알고리즘을 시각화하는 Frogger의 전체 구조와, 새 언어를 추가할 때의 구현 비용을 정리한 문서입니다.
 
 ---
 
 ## 1. 디렉토리 구조
 
 ```
-prova/
+frogger/
 ├── app/                              # Next.js App Router (프론트엔드 + API)
 │   ├── api/analyze/route.ts          # [서버] AI 알고리즘 분류 API 엔드포인트
 │   ├── layout.tsx                    # 루트 레이아웃
@@ -16,14 +16,14 @@ prova/
 │
 ├── src/
 │   ├── config/
-│   │   └── provaRuntime.ts           # 실행 제한 설정 (timeout, maxSteps 등)
+│   │   └── froggerRuntime.ts           # 실행 제한 설정 (timeout, maxSteps 등)
 │   │
 │   ├── types/
-│   │   └── prova.ts                  # 파이프라인 전체에서 쓰이는 TypeScript 타입
+│   │   └── frogger.ts                  # 파이프라인 전체에서 쓰이는 TypeScript 타입
 │   │
 │   ├── features/
 │   │   ├── execution/
-│   │   │   └── runtime.ts            # Web Worker 라이프사이클 관리 (ProvaRuntime)
+│   │   │   └── runtime.ts            # Web Worker 라이프사이클 관리 (FroggerRuntime)
 │   │   ├── trace/
 │   │   │   └── merge.ts              # rawTrace + AI 어노테이션 → 최종 표시용 trace 병합
 │   │   ├── playback/
@@ -40,7 +40,7 @@ prova/
 │   │   └── tagNormalize.ts               # 태그 중복 제거 및 kebab-case 정규화
 │   │
 │   └── store/
-│       └── useProvaStore.ts          # Zustand 전역 상태 관리
+│       └── useFroggerStore.ts          # Zustand 전역 상태 관리
 │
 ├── public/worker/
 │   └── pyodide.worker.js             # ★ Python 실행 + 트레이싱 엔진 (425줄)
@@ -91,6 +91,7 @@ prova/
 ```
 
 **주요 구현 세부사항:**
+
 - **런타임:** Pyodide (CPython 3.11 → WebAssembly) — 브라우저 내에서 Python을 실행
 - **실행 추적:** `sys.settrace()` 훅으로 매 줄 실행마다 콜백
 - **변수 직렬화:** `_safe()` 함수가 모든 로컬/전역 변수를 JSON-안전한 구조로 변환
@@ -98,7 +99,7 @@ prova/
   - 루트 레벨 컬렉션: 최대 30개 원소
   - 중첩 컬렉션: 최대 12개 원소
 - **심볼 필터링:** Python `ast.parse()`로 유저 정의 변수만 추출 (내장/임포트 제외)
-- **제한값 (`provaRuntime.ts`):** 타임아웃 120초, 최대 10,000 스텝
+- **제한값 (`froggerRuntime.ts`):** 타임아웃 120초, 최대 10,000 스텝
 
 ---
 
@@ -160,35 +161,35 @@ rawTrace + analyzeMetadata
   └─────────────────────────────────────────────────────┘
         │
         ▼
-  Zustand store (useProvaStore)로 현재 스텝 관리
+  Zustand store (useFroggerStore)로 현재 스텝 관리
   TimelineControls로 재생/탐색
 ```
 
 ---
 
-## 3. 핵심 데이터 타입 (`src/types/prova.ts`)
+## 3. 핵심 데이터 타입 (`src/types/frogger.ts`)
 
 ```typescript
 // Worker → 메인 스레드
 interface RawTraceStep {
   step: number;
   line: number;
-  vars: Record<string, unknown>;    // 변수명 → 직렬화된 값
+  vars: Record<string, unknown>; // 변수명 → 직렬화된 값
   scope: { func: string; depth: number };
   stdout?: string[];
-  runtimeError: { type, message, line } | null;
+  runtimeError: { type; message; line } | null;
 }
 
 // AI API 응답
 interface AnalyzeMetadata {
   algorithm: string;
   display_name: string;
-  strategy: "GRID" | "LINEAR" | "GRID_LINEAR" | "GRAPH";
+  strategy: 'GRID' | 'LINEAR' | 'GRID_LINEAR' | 'GRAPH';
   tags: string[];
   key_vars: string[];
   var_mapping: Record<string, { var_name: string; panel: string }>;
   linear_pivots?: LinearPivotSpec[];
-  graph_mode?: "directed" | "undirected";
+  graph_mode?: 'directed' | 'undirected';
   graph_var_name?: string;
   time_complexity?: string;
 }
@@ -206,20 +207,20 @@ interface MergedTraceStep extends RawTraceStep {
 
 ### Python 전용 코드 (새 언어 추가 시 교체 필요)
 
-| 파일 | 역할 | 포터빌리티 |
-|------|------|-----------|
-| `public/worker/pyodide.worker.js` | Python 실행 엔진, 트레이서, 변수 직렬화 | Python 전용 |
-| `app/page.tsx` (일부) | Python 키워드 하이라이팅, 문자열/주석 정규식 | Python 전용 |
+| 파일                              | 역할                                         | 포터빌리티  |
+| --------------------------------- | -------------------------------------------- | ----------- |
+| `public/worker/pyodide.worker.js` | Python 실행 엔진, 트레이서, 변수 직렬화      | Python 전용 |
+| `app/page.tsx` (일부)             | Python 키워드 하이라이팅, 문자열/주석 정규식 | Python 전용 |
 
 ### 언어 무관 코드 (재사용 가능)
 
-| 파일 | 역할 | 재사용 가능 여부 |
-|------|------|----------------|
-| `app/api/analyze/route.ts` | AI 분류, JSON 정규화, 재시도 로직 | 완전 재사용 가능 |
-| `src/features/visualization/*.tsx` | 시각화 엔진 (d3, Three.js) | 완전 재사용 가능 |
-| `src/store/useProvaStore.ts` | 전역 상태 관리 | 완전 재사용 가능 |
-| `src/types/prova.ts` | 타입 정의 | 거의 재사용 가능 |
-| `src/lib/*.ts` | 그래프 추론, 태그 정규화 등 | 재사용 가능 |
+| 파일                               | 역할                              | 재사용 가능 여부 |
+| ---------------------------------- | --------------------------------- | ---------------- |
+| `app/api/analyze/route.ts`         | AI 분류, JSON 정규화, 재시도 로직 | 완전 재사용 가능 |
+| `src/features/visualization/*.tsx` | 시각화 엔진 (d3, Three.js)        | 완전 재사용 가능 |
+| `src/store/useFroggerStore.ts`     | 전역 상태 관리                    | 완전 재사용 가능 |
+| `src/types/frogger.ts`             | 타입 정의                         | 거의 재사용 가능 |
+| `src/lib/*.ts`                     | 그래프 추론, 태그 정규화 등       | 재사용 가능      |
 
 ---
 
@@ -233,16 +234,17 @@ interface MergedTraceStep extends RawTraceStep {
 
 ### 구성요소별 비용
 
-| 구성요소 | 난이도 | 예상 작업량 | 비고 |
-|----------|--------|------------|------|
-| **실행 엔진 + 트레이서** | 매우 높음 | ~2,000 LOC | 언어별 런타임 필요 |
-| **심볼 추출기 (AST)** | 높음 | ~500 LOC | 언어별 파서 필요 |
-| **AI 프롬프트 조정** | 중간 | ~300 LOC | 언어 문법 패턴 추가 |
-| **UI 키워드 하이라이팅** | 낮음 | ~100 LOC | 완전 재사용 가능 |
+| 구성요소                 | 난이도    | 예상 작업량 | 비고                |
+| ------------------------ | --------- | ----------- | ------------------- |
+| **실행 엔진 + 트레이서** | 매우 높음 | ~2,000 LOC  | 언어별 런타임 필요  |
+| **심볼 추출기 (AST)**    | 높음      | ~500 LOC    | 언어별 파서 필요    |
+| **AI 프롬프트 조정**     | 중간      | ~300 LOC    | 언어 문법 패턴 추가 |
+| **UI 키워드 하이라이팅** | 낮음      | ~100 LOC    | 완전 재사용 가능    |
 
 ### 언어별 접근 방식 & 상대적 비용
 
 #### JavaScript / TypeScript
+
 - **접근:** Babel/Acorn으로 AST 파싱 + 코드 계측(instrumentation) 후 실행
 - **트레이서:** `Proxy` 객체 또는 코드 변환으로 변수 스냅샷 수집 (settrace 직접 대응 없음)
 - **실행 환경:** 브라우저에서 직접 실행 가능 (iframe sandbox 등)
@@ -250,18 +252,21 @@ interface MergedTraceStep extends RawTraceStep {
 - **예상 비용:** Python 대비 **1.5배**
 
 #### Go
+
 - **접근:** Go → WebAssembly 컴파일 후 브라우저 실행
 - **트레이서:** 빌드 시 계측(instrumentation) 삽입 또는 `runtime.Callers`
 - **실행 환경:** `wasm_exec.js` 브라우저 바인딩으로 가능
 - **예상 비용:** Python 대비 **1.5배**
 
 #### Java / C#
+
 - **접근:** 서버사이드 실행 + WebSocket/SSE로 스트리밍이 현실적
 - **트레이서:** JVMTI 에이전트 (Java) 또는 IL Rewriting (C#)
 - **난점:** 아키텍처 변경 필요 (서버 실행 인프라)
 - **예상 비용:** Python 대비 **2.5~3배**
 
 #### C / C++
+
 - **접근:** 원격 서버에서 컴파일 + GDB/LLDB 디버거 연동
 - **난점:** 브라우저 내 안전 실행 불가, 포인터/메모리 직렬화
 - **예상 비용:** Python 대비 **3~4배** + 서버 인프라 필요
@@ -286,7 +291,7 @@ JavaScript/TypeScript  →  Go/Rust  →  Java/C#  →  C/C++
 - [ ] `app/page.tsx` — 언어 선택 UI + 해당 언어 키워드 하이라이팅
 - [ ] `app/api/analyze/route.ts` — AI 프롬프트에 언어별 문법 패턴 추가
   - (예: `.push()` / `.pop()`, `for...of`, 화살표 함수 등)
-- [ ] `src/types/prova.ts` — 필요 시 타입 확장 (대부분 재사용 가능)
+- [ ] `src/types/frogger.ts` — 필요 시 타입 확장 (대부분 재사용 가능)
 
 **시각화 엔진(`visualization/`)과 상태 관리(`store/`)는 수정 불필요.**
 

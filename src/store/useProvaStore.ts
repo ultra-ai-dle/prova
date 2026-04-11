@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { create } from "zustand";
+import { create } from 'zustand';
 import {
   AnalyzeMetadata,
   AnnotatedStep,
@@ -9,18 +9,18 @@ import {
   PlaybackState,
   PyodideStatus,
   RawTraceStep,
-  TraceError
-} from "@/types/prova";
-import { mergeTrace } from "@/features/trace/merge";
+  TraceError,
+} from '@/types/frogger';
+import { mergeTrace } from '@/features/trace/merge';
 
 type UiMode =
-  | "ready"
-  | "running"
-  | "visualizing"
-  | "errorStep"
-  | "dataExploration";
+  | 'ready'
+  | 'running'
+  | 'visualizing'
+  | 'errorStep'
+  | 'dataExploration';
 
-interface ProvaState {
+interface FroggerState {
   pyodideStatus: PyodideStatus;
   uiMode: UiMode;
   rawTrace: RawTraceStep[];
@@ -51,9 +51,9 @@ interface ProvaState {
 
 const initialBranchLines: BranchLines = { loop: [], branch: [] };
 
-export const useProvaStore = create<ProvaState>((set, get) => ({
-  pyodideStatus: "loading",
-  uiMode: "ready",
+export const useFroggerStore = create<FroggerState>((set, get) => ({
+  pyodideStatus: 'loading',
+  uiMode: 'ready',
   rawTrace: [],
   annotated: [],
   mergedTrace: [],
@@ -64,9 +64,9 @@ export const useProvaStore = create<ProvaState>((set, get) => ({
   playback: {
     currentStep: 0,
     isPlaying: false,
-    playbackSpeed: 1
+    playbackSpeed: 1,
   },
-  stdin: "",
+  stdin: '',
   setPyodideStatus: (status) => set({ pyodideStatus: status }),
   setStdin: (stdin) => set({ stdin }),
   setWorkerResult: ({ rawTrace, branchLines, varTypes }) =>
@@ -74,13 +74,13 @@ export const useProvaStore = create<ProvaState>((set, get) => ({
       rawTrace,
       branchLines,
       varTypes,
-      mergedTrace: mergeTrace(rawTrace, state.annotated)
+      mergedTrace: mergeTrace(rawTrace, state.annotated),
     })),
   setMetadata: (metadata) => set({ metadata }),
   setAnnotated: (annotated) =>
     set((state) => ({
       annotated,
-      mergedTrace: mergeTrace(state.rawTrace, annotated)
+      mergedTrace: mergeTrace(state.rawTrace, annotated),
     })),
   setUiMode: (uiMode) => set({ uiMode }),
   setGlobalError: (globalError) => set({ globalError }),
@@ -88,8 +88,11 @@ export const useProvaStore = create<ProvaState>((set, get) => ({
     set((state) => ({
       playback: {
         ...state.playback,
-        currentStep: Math.max(0, Math.min(step, Math.max(state.mergedTrace.length - 1, 0)))
-      }
+        currentStep: Math.max(
+          0,
+          Math.min(step, Math.max(state.mergedTrace.length - 1, 0)),
+        ),
+      },
     })),
   setPlaying: (isPlaying) =>
     set((state) => ({ playback: { ...state.playback, isPlaying } })),
@@ -97,13 +100,13 @@ export const useProvaStore = create<ProvaState>((set, get) => ({
     set((state) => ({ playback: { ...state.playback, playbackSpeed } })),
   resetForRun: () =>
     set({
-      uiMode: "running",
+      uiMode: 'running',
       rawTrace: [],
       annotated: [],
       mergedTrace: [],
       branchLines: initialBranchLines,
       varTypes: {},
       globalError: null,
-      playback: { ...get().playback, currentStep: 0, isPlaying: false }
-    })
+      playback: { ...get().playback, currentStep: 0, isPlaying: false },
+    }),
 }));

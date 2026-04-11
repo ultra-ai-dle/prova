@@ -4,11 +4,11 @@ let pyodideReadyPromise = null;
 let pyodide = null;
 
 function inferType(value) {
-  if (Array.isArray(value) && Array.isArray(value[0])) return "list2d";
-  if (Array.isArray(value)) return "list";
-  if (typeof value === "number") return "int";
-  if (typeof value === "boolean") return "bool";
-  if (value === null) return "none";
+  if (Array.isArray(value) && Array.isArray(value[0])) return 'list2d';
+  if (Array.isArray(value)) return 'list';
+  if (typeof value === 'number') return 'int';
+  if (typeof value === 'boolean') return 'bool';
+  if (value === null) return 'none';
   return typeof value;
 }
 
@@ -28,29 +28,29 @@ async function ensurePyodideReady() {
   if (pyodide) return pyodide;
   if (!pyodideReadyPromise) {
     pyodideReadyPromise = (async () => {
-      importScripts("https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");
+      importScripts('https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js');
       pyodide = await self.loadPyodide({});
-      self.postMessage({ type: "ready" });
+      self.postMessage({ type: 'ready' });
       return pyodide;
     })();
   }
   return pyodideReadyPromise;
 }
 
-function provaPositiveInt(value, fallback) {
+function froggerPositiveInt(value, fallback) {
   const x = Math.floor(Number(value));
   return Number.isFinite(x) && x > 0 ? x : fallback;
 }
 
-/** limits는 src/config/provaRuntime.ts 와 동기화되는 기본값을 둔다. */
+/** limits는 src/config/froggerRuntime.ts 와 동기화되는 기본값을 둔다. */
 async function runWithTrace(code, stdin, limits = {}) {
-  const maxTraceSteps = provaPositiveInt(limits.maxTraceSteps, 10000);
-  const safeL0 = provaPositiveInt(limits.safeSerializeListLimitRoot, 30);
-  const safeLN = provaPositiveInt(limits.safeSerializeListLimitNested, 12);
+  const maxTraceSteps = froggerPositiveInt(limits.maxTraceSteps, 10000);
+  const safeL0 = froggerPositiveInt(limits.safeSerializeListLimitRoot, 30);
+  const safeLN = froggerPositiveInt(limits.safeSerializeListLimitNested, 12);
 
   const runtime = await ensurePyodideReady();
-  runtime.globals.set("__prova_code", String(code));
-  runtime.globals.set("__prova_stdin", String(stdin ?? ""));
+  runtime.globals.set('__frogger_code', String(code));
+  runtime.globals.set('__frogger_stdin', String(stdin ?? ''));
 
   const resultJson = await runtime.runPythonAsync(`
 import json
@@ -61,10 +61,10 @@ import ast
 import collections
 import math
 
-_prova_code = __prova_code
-_prova_stdin = __prova_stdin
+_frogger_code = __frogger_code
+_frogger_stdin = __frogger_stdin
 
-class _ProvaStdin:
+class _FroggerStdin:
     def __init__(self, text):
         self.lines = text.splitlines(True)
         self.idx = 0
@@ -88,7 +88,7 @@ def _refresh_stdout_lines():
         if not any(marker in line for marker in _NOISY_OUTPUT_MARKERS)
     ]
 
-class _ProvaStdout:
+class _FroggerStdout:
     def write(self, s):
         global _stdout_buffer
         _stdout_buffer += str(s)
@@ -96,9 +96,9 @@ class _ProvaStdout:
     def flush(self):
         return None
 
-sys.stdin = _ProvaStdin(_prova_stdin)
-sys.stdout = _ProvaStdout()
-sys.stderr = _ProvaStdout()
+sys.stdin = _FroggerStdin(_frogger_stdin)
+sys.stdout = _FroggerStdout()
+sys.stderr = _FroggerStdout()
 
 _trace = []
 _step = 0
@@ -153,7 +153,7 @@ def _collect_user_symbols(src):
                 symbols.add((alias.asname or alias.name))
     return symbols
 
-_USER_SYMBOLS = _collect_user_symbols(_prova_code)
+_USER_SYMBOLS = _collect_user_symbols(_frogger_code)
 
 def _safe(v, depth=0):
     if v is None or isinstance(v, (bool, int, float, str)):
@@ -201,7 +201,7 @@ def _should_skip_local(name, value, *, require_user_symbol=False):
         return True
     if require_user_symbol and name not in _USER_SYMBOLS:
         return True
-    if isinstance(value, (_ProvaStdin, _ProvaStdout)):
+    if isinstance(value, (_FroggerStdin, _FroggerStdout)):
         return True
     if isinstance(value, types.ModuleType):
         return True
@@ -211,9 +211,9 @@ def _should_skip_local(name, value, *, require_user_symbol=False):
         return True
     if callable(value):
         return True
-    # Bound-method repr noise such as "<bound method _ProvaStdin.readline ...>"
+    # Bound-method repr noise such as "<bound method _FroggerStdin.readline ...>"
     text = repr(value)
-    if "_ProvaStdin" in text or "_ProvaStdout" in text:
+    if "_FroggerStdin" in text or "_FroggerStdout" in text:
         return True
     return False
 
@@ -229,7 +229,7 @@ def _tracer(frame, event, arg):
     global _step, _last_line, _trace_disabled, _trace_truncated
     if _trace_disabled:
         return None
-    if frame.f_code.co_filename != "<prova_user_code>":
+    if frame.f_code.co_filename != "<frogger_user_code>":
         return _tracer
     if event not in ("line", "call"):
         return _tracer
@@ -241,7 +241,7 @@ def _tracer(frame, event, arg):
 
     # Emit explicit call-site step so one-line calls like
     # "for i in truth: dfs(i)" are visible in step navigation.
-    if event == "call" and frame.f_back is not None and frame.f_back.f_code.co_filename == "<prova_user_code>":
+    if event == "call" and frame.f_back is not None and frame.f_back.f_code.co_filename == "<frogger_user_code>":
         caller_locals = {}
         for ck, cv in frame.f_back.f_locals.items():
             if _should_skip_local(ck, cv):
@@ -301,7 +301,7 @@ _trace.append({
 _step = 1
 
 try:
-    compiled = compile(_prova_code, "<prova_user_code>", "exec")
+    compiled = compile(_frogger_code, "<frogger_user_code>", "exec")
     glb = {"__name__": "__main__"}
     sys.settrace(_tracer)
     exec(compiled, glb, glb)
@@ -335,7 +335,7 @@ except BaseException as e:
     tb = traceback.extract_tb(e.__traceback__)
     line_no = 0
     for t in reversed(tb):
-        if t.filename == "<prova_user_code>":
+        if t.filename == "<frogger_user_code>":
             line_no = int(t.lineno)
             break
     if e.__class__.__name__ == "SystemExit":
@@ -391,18 +391,18 @@ _result_json
 }
 
 self.onmessage = async (event) => {
-  const { code = "", stdin = "", limits = {} } = event.data || {};
+  const { code = '', stdin = '', limits = {} } = event.data || {};
   if (String(code).trim().length === 0) {
     self.postMessage({
-      type: "invalid_input",
-      message: "코드를 입력한 후 디버깅을 시작하세요."
+      type: 'invalid_input',
+      message: '코드를 입력한 후 디버깅을 시작하세요.',
     });
     return;
   }
   if (String(stdin).trim().length === 0) {
     self.postMessage({
-      type: "invalid_input",
-      message: "예시 입력(stdin)을 입력한 후 디버깅을 시작하세요."
+      type: 'invalid_input',
+      message: '예시 입력(stdin)을 입력한 후 디버깅을 시작하세요.',
     });
     return;
   }
@@ -411,35 +411,35 @@ self.onmessage = async (event) => {
     const rawTrace = await runWithTrace(code, stdin, limits);
     const varTypes = extractVarTypesUnion(rawTrace);
     self.postMessage({
-      type: "done",
+      type: 'done',
       rawTrace,
       branchLines: { loop: [], branch: [] },
-      varTypes
+      varTypes,
     });
   } catch (error) {
     const message =
       error instanceof Error
-        ? `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ""}`
+        ? `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ''}`
         : String(error);
     self.postMessage({
-      type: "done",
+      type: 'done',
       rawTrace: [
         {
           step: 0,
           line: 0,
           vars: {},
-          scope: { func: "<global>", depth: 1 },
+          scope: { func: '<global>', depth: 1 },
           parent_frames: [],
           stdout: [],
           runtimeError: {
-            type: "WorkerError",
+            type: 'WorkerError',
             message,
-            line: 0
-          }
-        }
+            line: 0,
+          },
+        },
       ],
       branchLines: { loop: [], branch: [] },
-      varTypes: {}
+      varTypes: {},
     });
   }
 };

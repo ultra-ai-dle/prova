@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { provaRuntimeConfig } from "@/config/provaRuntime";
-import { WorkerDonePayload } from "@/types/prova";
+import { froggerRuntimeConfig } from '@/config/froggerRuntime';
+import { WorkerDonePayload } from '@/types/frogger';
 
 type RuntimeCallbacks = {
   onReady: () => void;
@@ -11,12 +11,15 @@ type RuntimeCallbacks = {
   onInvalidInput: (message: string) => void;
 };
 
-export class ProvaRuntime {
+export class FroggerRuntime {
   private worker: Worker | null = null;
 
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private callbacks: RuntimeCallbacks, private language: string = "python") {}
+  constructor(
+    private callbacks: RuntimeCallbacks,
+    private language: string = 'python',
+  ) {}
 
   init() {
     this.createWorker();
@@ -24,11 +27,13 @@ export class ProvaRuntime {
 
   run(code: string, stdin: string) {
     if (code.trim().length === 0) {
-      this.callbacks.onInvalidInput("코드를 입력한 후 디버깅을 시작하세요.");
+      this.callbacks.onInvalidInput('코드를 입력한 후 디버깅을 시작하세요.');
       return;
     }
-    if (this.language === "python" && stdin.trim().length === 0) {
-      this.callbacks.onInvalidInput("예시 입력(stdin)을 입력한 후 디버깅을 시작하세요.");
+    if (this.language === 'python' && stdin.trim().length === 0) {
+      this.callbacks.onInvalidInput(
+        '예시 입력(stdin)을 입력한 후 디버깅을 시작하세요.',
+      );
       return;
     }
     if (!this.worker) {
@@ -39,15 +44,17 @@ export class ProvaRuntime {
       this.worker?.terminate();
       this.callbacks.onTimeout();
       this.createWorker();
-    }, provaRuntimeConfig.executionTimeoutMs);
+    }, froggerRuntimeConfig.executionTimeoutMs);
     this.worker?.postMessage({
       code,
       stdin,
       limits: {
-        maxTraceSteps: provaRuntimeConfig.maxTraceSteps,
-        safeSerializeListLimitRoot: provaRuntimeConfig.safeSerializeListLimitRoot,
-        safeSerializeListLimitNested: provaRuntimeConfig.safeSerializeListLimitNested
-      }
+        maxTraceSteps: froggerRuntimeConfig.maxTraceSteps,
+        safeSerializeListLimitRoot:
+          froggerRuntimeConfig.safeSerializeListLimitRoot,
+        safeSerializeListLimitNested:
+          froggerRuntimeConfig.safeSerializeListLimitNested,
+      },
     });
   }
 
@@ -58,8 +65,11 @@ export class ProvaRuntime {
   }
 
   private workerUrl(): string {
-    const version = encodeURIComponent(provaRuntimeConfig.workerScriptVersion);
-    if (this.language === "javascript") return `/worker/js.worker.js?v=${version}`;
+    const version = encodeURIComponent(
+      froggerRuntimeConfig.workerScriptVersion,
+    );
+    if (this.language === 'javascript')
+      return `/worker/js.worker.js?v=${version}`;
     return `/worker/pyodide.worker.js?v=${version}`;
   }
 
@@ -68,18 +78,20 @@ export class ProvaRuntime {
     this.worker = new Worker(this.workerUrl());
     this.worker.onmessage = (event: MessageEvent) => {
       const data = event.data;
-      if (data.type === "ready") {
+      if (data.type === 'ready') {
         this.callbacks.onReady();
         return;
       }
-      if (data.type === "done") {
+      if (data.type === 'done') {
         this.clearTimeout();
         this.callbacks.onDone(data);
         return;
       }
-      if (data.type === "invalid_input") {
+      if (data.type === 'invalid_input') {
         this.clearTimeout();
-        this.callbacks.onInvalidInput(String(data.message ?? "입력 코드가 비어 있습니다."));
+        this.callbacks.onInvalidInput(
+          String(data.message ?? '입력 코드가 비어 있습니다.'),
+        );
       }
     };
     this.worker.onerror = (event) => {

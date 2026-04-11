@@ -1,6 +1,6 @@
-import { NextRequest } from "next/server";
-import { RawTraceStep, AnnotatedStep } from "@/types/prova";
-import { buildChain, callWithFallback } from "@/lib/ai-providers";
+import { NextRequest } from 'next/server';
+import { RawTraceStep, AnnotatedStep } from '@/types/frogger';
+import { buildChain, callWithFallback } from '@/lib/ai-providers';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -17,7 +17,7 @@ type SlimStep = {
 
 function buildDelta(
   curr: Record<string, unknown>,
-  prev: Record<string, unknown>
+  prev: Record<string, unknown>,
 ): Record<string, unknown> {
   const delta: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(curr)) {
@@ -30,7 +30,7 @@ function buildDelta(
 
 function buildPrompt(
   slim: SlimStep[],
-  ctx: { algorithm: string; strategy: string }
+  ctx: { algorithm: string; strategy: string },
 ): string {
   return [
     `Python 알고리즘 디버거 스텝 설명기.`,
@@ -42,65 +42,96 @@ function buildPrompt(
     `runtimeError(err 필드)가 있는 스텝은 aiError: {"root_cause":"...","fix_hint":"..."}로 채울 것.`,
     ``,
     `스텝:`,
-    JSON.stringify(slim)
-  ].join("\n");
+    JSON.stringify(slim),
+  ].join('\n');
 }
 
 // ── Response parsing ──────────────────────────────────────────────────────────
 
 function stripFence(text: string): string {
-  return text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/, "").trim();
+  return text
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim();
 }
 
 function extractJsonArray(text: string): unknown[] | null {
   const cleaned = stripFence(text);
   // Direct array
-  const start = cleaned.indexOf("[");
+  const start = cleaned.indexOf('[');
   if (start >= 0) {
-    let depth = 0, inStr = false, esc = false;
+    let depth = 0,
+      inStr = false,
+      esc = false;
     for (let i = start; i < cleaned.length; i++) {
       const ch = cleaned[i];
-      if (inStr) { esc = !esc && ch === "\\"; if (!esc && ch === '"') inStr = false; continue; }
-      if (ch === '"') { inStr = true; continue; }
-      if (ch === "[") depth++;
-      if (ch === "]") {
+      if (inStr) {
+        esc = !esc && ch === '\\';
+        if (!esc && ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') {
+        inStr = true;
+        continue;
+      }
+      if (ch === '[') depth++;
+      if (ch === ']') {
         depth--;
         if (depth === 0) {
-          try { return JSON.parse(cleaned.slice(start, i + 1)) as unknown[]; } catch { return null; }
+          try {
+            return JSON.parse(cleaned.slice(start, i + 1)) as unknown[];
+          } catch {
+            return null;
+          }
         }
       }
     }
   }
   // Wrapped in object {"steps":[...]} etc.
-  const objStart = cleaned.indexOf("{");
+  const objStart = cleaned.indexOf('{');
   if (objStart >= 0) {
     try {
-      const obj = JSON.parse(cleaned.slice(objStart)) as Record<string, unknown>;
+      const obj = JSON.parse(cleaned.slice(objStart)) as Record<
+        string,
+        unknown
+      >;
       for (const v of Object.values(obj)) {
         if (Array.isArray(v)) return v;
       }
-    } catch { /* fall through */ }
+    } catch {
+      /* fall through */
+    }
   }
   return null;
 }
 
-function parseAnnotatedSteps(raw: string, count: number): AnnotatedStep[] | null {
+function parseAnnotatedSteps(
+  raw: string,
+  count: number,
+): AnnotatedStep[] | null {
   const arr = extractJsonArray(raw);
   if (!arr || arr.length !== count) return null;
   return arr.map((item) => {
     const o = (item ?? {}) as Record<string, unknown>;
     return {
-      explanation: typeof o.explanation === "string" ? o.explanation : "—",
+      explanation: typeof o.explanation === 'string' ? o.explanation : '—',
       visual_actions: Array.isArray(o.visual_actions)
-        ? (o.visual_actions as unknown[]).filter((x): x is string => typeof x === "string")
-        : ["highlight"],
+        ? (o.visual_actions as unknown[]).filter(
+            (x): x is string => typeof x === 'string',
+          )
+        : ['highlight'],
       aiError:
-        o.aiError && typeof o.aiError === "object"
+        o.aiError && typeof o.aiError === 'object'
           ? {
-              root_cause: String((o.aiError as Record<string, unknown>).root_cause ?? ""),
-              fix_hint:   String((o.aiError as Record<string, unknown>).fix_hint   ?? "")
+              root_cause: String(
+                (o.aiError as Record<string, unknown>).root_cause ?? '',
+              ),
+              fix_hint: String(
+                (o.aiError as Record<string, unknown>).fix_hint ?? '',
+              ),
             }
-          : null
+          : null,
     } satisfies AnnotatedStep;
   });
 }
@@ -111,14 +142,18 @@ function templateStep(step: RawTraceStep): AnnotatedStep {
   if (step.runtimeError) {
     return {
       explanation: `L.${step.line} — 런타임 오류: ${step.runtimeError.type}`,
-      visual_actions: ["markError", "pause"],
+      visual_actions: ['markError', 'pause'],
       aiError: {
         root_cause: step.runtimeError.message || step.runtimeError.type,
-        fix_hint: "오류 메시지를 확인하고 코드를 수정하세요."
-      }
+        fix_hint: '오류 메시지를 확인하고 코드를 수정하세요.',
+      },
     };
   }
-  return { explanation: `L.${step.line} 실행`, visual_actions: ["highlight"], aiError: null };
+  return {
+    explanation: `L.${step.line} 실행`,
+    visual_actions: ['highlight'],
+    aiError: null,
+  };
 }
 
 // ── Annotate one batch ────────────────────────────────────────────────────────
@@ -126,7 +161,7 @@ function templateStep(step: RawTraceStep): AnnotatedStep {
 async function annotateBatch(
   batch: RawTraceStep[],
   prevVars: Record<string, unknown>,
-  ctx: { algorithm: string; strategy: string }
+  ctx: { algorithm: string; strategy: string },
 ): Promise<AnnotatedStep[]> {
   const chain = buildChain();
   if (chain.length === 0) return batch.map(templateStep);
@@ -136,12 +171,12 @@ async function annotateBatch(
   let prev = prevVars;
   for (const step of batch) {
     slim.push({
-      idx:   step.step,
-      line:  step.line,
+      idx: step.step,
+      line: step.line,
       delta: buildDelta(step.vars, prev),
-      err:   step.runtimeError
+      err: step.runtimeError
         ? { type: step.runtimeError.type, message: step.runtimeError.message }
-        : null
+        : null,
     });
     prev = step.vars;
   }
@@ -171,20 +206,22 @@ function sseEvent(event: string, data: unknown): Uint8Array {
 
 export async function POST(req: NextRequest) {
   let rawTrace: RawTraceStep[] = [];
-  let algorithm = "Unknown";
-  let strategy  = "LINEAR";
+  let algorithm = 'Unknown';
+  let strategy = 'LINEAR';
 
   try {
     const body = await req.json();
-    rawTrace  = (body?.rawTrace  ?? []) as RawTraceStep[];
-    algorithm = String(body?.algorithm ?? "Unknown");
-    strategy  = String(body?.strategy  ?? "LINEAR");
+    rawTrace = (body?.rawTrace ?? []) as RawTraceStep[];
+    algorithm = String(body?.algorithm ?? 'Unknown');
+    strategy = String(body?.strategy ?? 'LINEAR');
   } catch {
-    return new Response("Bad request", { status: 400 });
+    return new Response('Bad request', { status: 400 });
   }
 
   // Strip parent_frames — not needed by AI, saves tokens
-  const steps: RawTraceStep[] = rawTrace.map(({ parent_frames: _pf, ...rest }) => rest as RawTraceStep);
+  const steps: RawTraceStep[] = rawTrace.map(
+    ({ parent_frames: _pf, ...rest }) => rest as RawTraceStep,
+  );
 
   const ctx = { algorithm, strategy };
 
@@ -198,27 +235,27 @@ export async function POST(req: NextRequest) {
           const batch = steps.slice(batchStart, batchStart + CHUNK_SIZE);
           const chunk = await annotateBatch(batch, prevVars, ctx);
 
-          controller.enqueue(sseEvent("chunk", { index: batchStart, chunk }));
+          controller.enqueue(sseEvent('chunk', { index: batchStart, chunk }));
 
-          prevVars    = batch[batch.length - 1]?.vars ?? prevVars;
+          prevVars = batch[batch.length - 1]?.vars ?? prevVars;
           batchStart += CHUNK_SIZE;
         }
 
-        controller.enqueue(sseEvent("done", {}));
+        controller.enqueue(sseEvent('done', {}));
       } catch {
-        controller.enqueue(sseEvent("error", { message: "설명 생성 실패" }));
+        controller.enqueue(sseEvent('error', { message: '설명 생성 실패' }));
       } finally {
         controller.close();
       }
-    }
+    },
   });
 
   return new Response(stream, {
     headers: {
-      "Content-Type":    "text/event-stream",
-      "Cache-Control":   "no-cache",
-      "Connection":      "keep-alive",
-      "X-Accel-Buffering": "no"
-    }
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    },
   });
 }

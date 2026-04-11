@@ -3,7 +3,7 @@ description: 선형 시각화·분석 메타 — 이름 휴리스틱 금지, GRI
 alwaysApply: true
 ---
 
-# Prova 선형 시각화와 `/api/analyze`
+# Frogger 선형 시각화와 `/api/analyze`
 
 ## GRID 맵 vs GRAPH
 
@@ -27,6 +27,6 @@ alwaysApply: true
 
 ## 구현 시
 
-- 분류·시각화 규칙 변경 시 **프롬프트(`app/api/analyze/route.ts`)·Gemini 스키마·`LinearPivotSpec`(`src/types/prova.ts`)·`pointersAtIndexFromSpecs`**를 함께 맞춘다.
+- 분류·시각화 규칙 변경 시 **프롬프트(`app/api/analyze/route.ts`)·Gemini 스키마·`LinearPivotSpec`(`src/types/frogger.ts`)·`pointersAtIndexFromSpecs`**를 함께 맞춘다.
 - 새 UI가 이름만 보고 포인터를 추정하면 안 된다.
 - **`/api/analyze` 보강**: `src/lib/partitionPivotEnrichment.ts` — AI 메타(알고리즘/태그) 또는 코드에 퀵소트 루틴이 있을 때만 `val = arr[0]` 대입을 스캔해 `pivot_mode: value_in_array`를 합친다. `route.ts`에 장문 정규식 한 줄을 두지 말 것.
