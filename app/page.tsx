@@ -21,6 +21,7 @@ import { usePlaybackTimer } from "@/hooks/usePlaybackTimer";
 import { useDragResize } from "@/hooks/useDragResize";
 import { useProvaExecution } from "@/hooks/useProvaExecution";
 import { TimelineControls } from "@/features/playback/TimelineControls";
+import { DebugCodeEditor } from "@/components/DebugCodeEditor";
 
 /* ── Helpers ─────────────────────────────────────────────── */
 function runButtonLabel(
@@ -714,54 +715,18 @@ export default function Page() {
                   />
                 </div>
               ) : (
-                <div
-                  className={`box-border h-full p-3 prova-scrollbar ${wordWrap ? "overflow-y-auto overflow-x-hidden" : "overflow-auto"}`}
-                >
-                  {code.split("\n").map((line, index) => {
-                    const lineNo = index + 1;
-                    const active = currentStep?.line === lineNo;
-                    const error = active && currentStep?.runtimeError;
-                    return (
-                      <div
-                        key={lineNo}
-                        className={`flex font-mono text-[12px] leading-5 transition-colors ${
-                          error
-                            ? "bg-[#3d0b0b] border-l-2 border-prova-red"
-                            : active
-                              ? "bg-[#2d3748]/60 border-l-2 border-[#58a6ff]"
-                              : "border-l-2 border-transparent"
-                        }`}
-                      >
-                        <span
-                          className={`w-9 shrink-0 text-right pr-3 select-none text-[11px] leading-5 ${
-                            active
-                              ? error
-                                ? "text-prova-red"
-                                : "text-[#58a6ff]"
-                              : "text-[#4a5568]"
-                          }`}
-                        >
-                          {lineNo}
-                        </span>
-                        <span
-                          className={`pl-2 ${wordWrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"} ${active && !error ? "text-white" : ""}`}
-                          style={{ tabSize }}
-                        >
-                          {(language === "javascript"
-                            ? highlightJsLine
-                            : highlightPythonLine)(line).map((token, idx) => (
-                            <span
-                              key={`${lineNo}-${idx}`}
-                              className={token.className}
-                            >
-                              {token.text}
-                            </span>
-                          ))}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                <DebugCodeEditor
+                  code={code}
+                  language={normalizedLanguage}
+                  wordWrap={wordWrap}
+                  tabSize={tabSize}
+                  mergedTrace={mergedTrace}
+                  currentStepIndex={playback.currentStep}
+                  currentStep={currentStep}
+                  setCurrentStep={setCurrentStep}
+                  setPlaying={setPlaying}
+                  isRunning={isRunning}
+                />
               )}
             </div>
 
