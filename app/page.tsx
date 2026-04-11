@@ -6,10 +6,11 @@ import { GraphPanel } from "@/features/visualization/GraphPanel";
 import { CallTreePanel } from "@/features/visualization/CallTreePanel";
 import { buildCallTree } from "@/features/visualization/callTreeBuilder";
 import { ProvaRuntime } from "@/features/execution/runtime";
-import { AnalyzeMetadata, RawTraceStep } from "@/types/prova";
+import { AnalyzeMetadata, AnnotatedStep, RawTraceStep } from "@/types/prova";
 import { useProvaStore } from "@/store/useProvaStore";
 import { resolveGraphMode } from "@/lib/graphModeInference";
 import { normalizeAndDedupeTags } from "@/lib/tagNormalize";
+import { getFromCache, saveToCache } from "@/lib/analyzeCache";
 
 /* ── SVG Icons ─────────────────────────────────────────── */
 const IconFiles = () => (
@@ -628,6 +629,43 @@ function stableStringifyObject(obj: Record<string, string>) {
   );
 }
 
+async function fetchErrorExplanation(
+  steps: RawTraceStep[],
+  algorithm: string,
+  strategy: string,
+): Promise<AnnotatedStep[]> {
+  const res = await fetch("/api/explain", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rawTrace: steps, algorithm, strategy }),
+  });
+  if (!res.ok || !res.body) return [];
+
+  const chunks: AnnotatedStep[] = [];
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const blocks = buf.split("\n\n");
+    buf = blocks.pop() ?? "";
+    for (const block of blocks) {
+      const dataLine = block.split("\n").find((l) => l.startsWith("data:"));
+      if (!dataLine) continue;
+      try {
+        const parsed = JSON.parse(dataLine.slice(5));
+        if (Array.isArray(parsed.chunk)) chunks.push(...parsed.chunk);
+      } catch {
+        /* 파싱 실패 시 무시 */
+      }
+    }
+  }
+  return chunks;
+}
+
 function maxNumericAbs(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value))
     return Math.abs(value);
@@ -728,6 +766,7 @@ export default function Page() {
     setPlaying,
     setSpeed,
     resetForRun,
+    setAnnotated,
   } = useProvaStore();
 
   const currentStep = mergedTrace[playback.currentStep] ?? null;
@@ -1111,9 +1150,12 @@ export default function Page() {
           setWorkerResult(sanitizedPayload);
           try {
             const analyzeKey = `${analyzeLanguage}\n@@\n${codeRef.current}\n@@\n${stableStringifyObject(sanitizedVarTypes)}\n@@\nmeta-v2-partition-pivot`;
-            const cachedMeta = analyzeCacheRef.current.get(analyzeKey);
+            const cachedMeta =
+              analyzeCacheRef.current.get(analyzeKey) ??
+              (await getFromCache(analyzeKey));
             let meta: AnalyzeMetadata;
             if (cachedMeta) {
+              analyzeCacheRef.current.set(analyzeKey, cachedMeta);
               meta = cachedMeta;
             } else {
               const inFlight = analyzeInFlightRef.current.get(analyzeKey);
@@ -1150,6 +1192,7 @@ export default function Page() {
                 try {
                   meta = await request;
                   analyzeCacheRef.current.set(analyzeKey, meta);
+                  saveToCache(analyzeKey, meta);
                 } finally {
                   analyzeInFlightRef.current.delete(analyzeKey);
                 }
@@ -1162,6 +1205,35 @@ export default function Page() {
             setUiMode(errorStepIndex >= 0 ? "errorStep" : "visualizing");
             setCurrentStep(errorStepIndex >= 0 ? errorStepIndex : 0);
             setPyodideStatus("ready");
+
+            if (errorStepIndex >= 0) {
+              const contextStart = Math.max(0, errorStepIndex - 3);
+              const contextEnd = Math.min(
+                sanitizedRawTrace.length,
+                errorStepIndex + 4,
+              );
+              const errorContext = sanitizedRawTrace.slice(
+                contextStart,
+                contextEnd,
+              );
+              fetchErrorExplanation(errorContext, meta.algorithm, meta.strategy)
+                .then((annotated) => {
+                  const sparse = new Array<AnnotatedStep>(
+                    sanitizedRawTrace.length,
+                  ).fill({
+                    explanation: "",
+                    visual_actions: [],
+                    aiError: null,
+                  });
+                  annotated.forEach((a, i) => {
+                    sparse[contextStart + i] = a;
+                  });
+                  setAnnotated(sparse);
+                })
+                .catch(() => {
+                  /* AI 실패 시 무시 — 원시 에러 메시지로 fallback */
+                });
+            }
           } catch (error) {
             const message =
               error instanceof Error ? error.message : String(error);
@@ -2257,12 +2329,12 @@ export default function Page() {
                   </span>
                 </div>
                 <div
-                  className={`flex-1 overflow-auto min-h-0 p-3 text-xs font-mono leading-5 ${
+                  className={`flex-1 overflow-auto min-h-0 p-3 text-xs font-mono leading-5 flex flex-col gap-2 ${
                     isError ? "bg-[#140a0a]" : "bg-[#0d1117]"
                   }`}
                 >
                   <div
-                    className={`h-full rounded-md border px-3 py-2 overflow-auto ${
+                    className={`rounded-md border px-3 py-2 overflow-auto ${
                       isError
                         ? "border-prova-red/40 bg-[#12090b] text-[#ffc1c1]"
                         : "border-[#30363d] bg-[#0b1119] text-[#c9d1d9]"

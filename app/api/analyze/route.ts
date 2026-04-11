@@ -3,7 +3,11 @@ import { AnalyzeMetadata, LinearPivotSpec } from "@/types/prova";
 import { inferGraphModeFromCode } from "@/lib/graphModeInference";
 import { enrichAnalyzeMetadataWithPartitionValuePivots } from "@/lib/partitionPivotEnrichment";
 import { normalizeAndDedupeTags } from "@/lib/tagNormalize";
-import { buildChain, callWithFallback, GeminiOptions } from "@/lib/ai-providers";
+import {
+  buildChain,
+  callWithFallback,
+  GeminiOptions,
+} from "@/lib/ai-providers";
 
 type Panel = "GRID" | "LINEAR" | "GRAPH" | "VARIABLES";
 type Strategy = "GRID" | "LINEAR" | "GRID_LINEAR" | "GRAPH";
@@ -22,7 +26,8 @@ type AnalyzeAiResponse = {
   uses_bitmasking?: boolean;
   time_complexity?: string;
   key_vars: string[];
-  var_mapping: Record<string, { var_name: string; panel: Panel }>;
+  var_mapping?: Record<string, { var_name: string; panel: Panel }>;
+  var_mapping_list?: Array<{ role: string; var_name: string; panel: Panel }>;
   linear_pivots?: Array<{
     var_name: string;
     badge?: string;
@@ -31,7 +36,17 @@ type AnalyzeAiResponse = {
   }>;
   linear_context_var_names?: string[];
   /** 변수명 → 특수 자료구조 뷰 종류 — 코드 맥락으로만 판별, 이름 무관 */
-  special_var_kinds?: Record<string, "HEAP" | "QUEUE" | "STACK" | "DEQUE" | "UNIONFIND" | "VISITED" | "DISTANCE" | "PARENT_TREE">;
+  special_var_kinds?: Record<
+    string,
+    | "HEAP"
+    | "QUEUE"
+    | "STACK"
+    | "DEQUE"
+    | "UNIONFIND"
+    | "VISITED"
+    | "DISTANCE"
+    | "PARENT_TREE"
+  >;
 };
 
 const ANALYZE_CODE_CHAR_LIMIT = 5000;
@@ -82,7 +97,7 @@ function extractFirstJsonObject(text: string) {
 function sanitizeJsonCandidate(text: string) {
   return text
     .replace(/^\uFEFF/, "")
-    .replace(/[“”]/g, "\"")
+    .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
     .replace(/,\s*([}\]])/g, "$1")
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
@@ -181,37 +196,61 @@ function detectDirectionMapVars(code: string) {
 const ANALYZE_GEMINI_SCHEMA: object = {
   type: "object",
   properties: {
-    algorithm:                { type: "string" },
-    display_name:             { type: "string" },
-    strategy:                 { type: "string" },
-    tags:                     { type: "array", items: { type: "string" } },
+    // 시각화 핵심 필드를 앞에 배치 — 토큰 부족 시에도 우선 생성되도록
+    algorithm: { type: "string" },
+    display_name: { type: "string" },
+    strategy: { type: "string" },
+    key_vars: { type: "array", items: { type: "string" } },
+    var_mapping_list: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          role: { type: "string" },
+          var_name: { type: "string" },
+          panel: {
+            type: "string",
+            enum: ["GRID", "LINEAR", "GRAPH", "VARIABLES"],
+          },
+        },
+        required: ["role", "var_name", "panel"],
+      },
+    },
+    // 보조 필드
+    tags: { type: "array", items: { type: "string" } },
     detected_data_structures: { type: "array", items: { type: "string" } },
-    detected_algorithms:      { type: "array", items: { type: "string" } },
-    summary:                  { type: "string" },
-    graph_mode:               { type: "string" },
-    graph_var_name:           { type: "string" },
-    graph_representation:     { type: "string" },
-    uses_bitmasking:          { type: "boolean" },
-    time_complexity:          { type: "string" },
-    key_vars:                 { type: "array", items: { type: "string" } },
-    var_mapping:              { type: "object" },
+    detected_algorithms: { type: "array", items: { type: "string" } },
+    graph_mode: { type: "string" },
+    graph_var_name: { type: "string" },
+    graph_representation: { type: "string" },
+    uses_bitmasking: { type: "boolean" },
+    time_complexity: { type: "string" },
     linear_pivots: {
       type: "array",
       items: {
         type: "object",
         properties: {
-          var_name:       { type: "string" },
-          badge:          { type: "string" },
+          var_name: { type: "string" },
+          badge: { type: "string" },
           indexes_1d_var: { type: "string" },
-          pivot_mode:     { type: "string", enum: ["index", "value_in_array"] }
+          pivot_mode: { type: "string", enum: ["index", "value_in_array"] },
         },
-        required: ["var_name"]
-      }
+        required: ["var_name"],
+      },
     },
     linear_context_var_names: { type: "array", items: { type: "string" } },
-    special_var_kinds:        { type: "object" }
+    special_var_kinds: { type: "object" },
+    // summary는 자유형 문자열이라 길어질 수 있으므로 마지막에 배치
+    summary: { type: "string", maxLength: 120 },
   },
-  required: ["algorithm", "display_name", "strategy", "tags", "key_vars", "var_mapping"]
+  required: [
+    "algorithm",
+    "display_name",
+    "strategy",
+    "key_vars",
+    "var_mapping_list",
+    "tags",
+  ],
 };
 
 function parseLinearPivots(
@@ -267,12 +306,30 @@ function normalizeResponse(
   const varNames = Object.keys(varTypes);
   const validMap: Record<string, { var_name: string; panel: Panel }> = {};
   const panelSet = new Set<Panel>(["GRID", "LINEAR", "GRAPH", "VARIABLES"]);
-  Object.entries(parsed.var_mapping ?? {}).forEach(([role, item]) => {
-    if (!item || typeof item.var_name !== "string") return;
-    if (!varNames.includes(item.var_name)) return;
-    const panel = panelSet.has(item.panel) ? item.panel : "VARIABLES";
-    validMap[role] = { var_name: item.var_name, panel };
-  });
+
+  // var_mapping_list (배열, Gemini structured output용) → 객체로 변환
+  if (Array.isArray(parsed.var_mapping_list)) {
+    parsed.var_mapping_list.forEach((item) => {
+      if (
+        !item ||
+        typeof item.role !== "string" ||
+        typeof item.var_name !== "string"
+      )
+        return;
+      if (!varNames.includes(item.var_name)) return;
+      const panel = panelSet.has(item.panel) ? item.panel : "VARIABLES";
+      validMap[item.role] = { var_name: item.var_name, panel };
+    });
+  }
+  // var_mapping (객체, 기존 포맷 및 non-Gemini 프로바이더용) — 폴백
+  if (Object.keys(validMap).length === 0) {
+    Object.entries(parsed.var_mapping ?? {}).forEach(([role, item]) => {
+      if (!item || typeof item.var_name !== "string") return;
+      if (!varNames.includes(item.var_name)) return;
+      const panel = panelSet.has(item.panel) ? item.panel : "VARIABLES";
+      validMap[role] = { var_name: item.var_name, panel };
+    });
+  }
 
   const keyVars = (parsed.key_vars ?? [])
     .filter((k) => varNames.includes(k))
@@ -305,10 +362,30 @@ function normalizeResponse(
     10,
   );
 
-  type SpecialKind = "HEAP" | "QUEUE" | "STACK" | "DEQUE" | "UNIONFIND" | "VISITED" | "DISTANCE" | "PARENT_TREE";
-  const validSpecialKinds = new Set<SpecialKind>(["HEAP", "QUEUE", "STACK", "DEQUE", "UNIONFIND", "VISITED", "DISTANCE", "PARENT_TREE"]);
+  type SpecialKind =
+    | "HEAP"
+    | "QUEUE"
+    | "STACK"
+    | "DEQUE"
+    | "UNIONFIND"
+    | "VISITED"
+    | "DISTANCE"
+    | "PARENT_TREE";
+  const validSpecialKinds = new Set<SpecialKind>([
+    "HEAP",
+    "QUEUE",
+    "STACK",
+    "DEQUE",
+    "UNIONFIND",
+    "VISITED",
+    "DISTANCE",
+    "PARENT_TREE",
+  ]);
   const specialVarKinds: Record<string, SpecialKind> = {};
-  if (parsed.special_var_kinds && typeof parsed.special_var_kinds === "object") {
+  if (
+    parsed.special_var_kinds &&
+    typeof parsed.special_var_kinds === "object"
+  ) {
     Object.entries(parsed.special_var_kinds).forEach(([vn, kind]) => {
       if (!varNames.includes(vn)) return;
       if (validSpecialKinds.has(kind as SpecialKind)) {
@@ -350,7 +427,8 @@ function normalizeResponse(
     var_mapping: validMap,
     linear_pivots: linearPivots,
     linear_context_var_names: linearContextVarNames,
-    special_var_kinds: Object.keys(specialVarKinds).length > 0 ? specialVarKinds : undefined
+    special_var_kinds:
+      Object.keys(specialVarKinds).length > 0 ? specialVarKinds : undefined,
   };
 }
 
@@ -511,7 +589,15 @@ function applyGraphModeInference(
   return { ...meta, graph_mode: inferred };
 }
 
-type SpecialKindValue = "HEAP" | "QUEUE" | "STACK" | "DEQUE" | "UNIONFIND" | "VISITED" | "DISTANCE" | "PARENT_TREE";
+type SpecialKindValue =
+  | "HEAP"
+  | "QUEUE"
+  | "STACK"
+  | "DEQUE"
+  | "UNIONFIND"
+  | "VISITED"
+  | "DISTANCE"
+  | "PARENT_TREE";
 
 /**
  * 코드 패턴 분석으로 special_var_kinds를 보완한다.
@@ -521,14 +607,15 @@ type SpecialKindValue = "HEAP" | "QUEUE" | "STACK" | "DEQUE" | "UNIONFIND" | "VI
 function enrichSpecialVarKinds(
   meta: AnalyzeMetadata,
   code: string,
-  varTypes: Record<string, string>
+  varTypes: Record<string, string>,
 ): AnalyzeMetadata {
   const varNames = Object.keys(varTypes);
   const existing = meta.special_var_kinds ?? {};
   const extra: Record<string, SpecialKindValue> = {};
 
   // HEAP: heapq.heappush(var, ...) 또는 heapq.heappop(var) 에 직접 쓰인 변수
-  const heapOpRe = /heapq\s*\.\s*(?:heappush|heappop|heapreplace|heappushpop)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)/g;
+  const heapOpRe =
+    /heapq\s*\.\s*(?:heappush|heappop|heapreplace|heappushpop)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)/g;
   let m: RegExpExecArray | null;
   while ((m = heapOpRe.exec(code)) !== null) {
     const v = m[1];
@@ -536,35 +623,46 @@ function enrichSpecialVarKinds(
   }
 
   // QUEUE: deque()로 초기화된 변수 + popleft 사용
-  const dequeInitRe = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:collections\.)?deque\s*\(/g;
+  const dequeInitRe =
+    /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:collections\.)?deque\s*\(/g;
   while ((m = dequeInitRe.exec(code)) !== null) {
     const v = m[1];
     if (!varNames.includes(v) || existing[v] || extra[v]) continue;
-    const hasPopleft = new RegExp(`\\b${v}\\s*\\.\\s*popleft\\s*\\(`).test(code);
-    const hasAppendleft = new RegExp(`\\b${v}\\s*\\.\\s*appendleft\\s*\\(`).test(code);
+    const hasPopleft = new RegExp(`\\b${v}\\s*\\.\\s*popleft\\s*\\(`).test(
+      code,
+    );
+    const hasAppendleft = new RegExp(
+      `\\b${v}\\s*\\.\\s*appendleft\\s*\\(`,
+    ).test(code);
     if (hasPopleft && !hasAppendleft) extra[v] = "QUEUE";
     else if (hasPopleft && hasAppendleft) extra[v] = "DEQUE";
     else if (hasAppendleft) extra[v] = "DEQUE";
   }
 
   // UNIONFIND: parent[x] = parent[parent[x]] 형태 경로 압축 패턴
-  const ufAssignRe = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\[([A-Za-z_][A-Za-z0-9_]*)\]\s*=\s*\1\s*\[\1\s*\[/g;
+  const ufAssignRe =
+    /\b([A-Za-z_][A-Za-z0-9_]*)\s*\[([A-Za-z_][A-Za-z0-9_]*)\]\s*=\s*\1\s*\[\1\s*\[/g;
   while ((m = ufAssignRe.exec(code)) !== null) {
     const v = m[1];
-    if (varNames.includes(v) && !existing[v] && !extra[v]) extra[v] = "UNIONFIND";
+    if (varNames.includes(v) && !existing[v] && !extra[v])
+      extra[v] = "UNIONFIND";
   }
   // 보조: def find(...) 함수 내에서 쓰인 배열
-  const findFuncRe = /def\s+find\s*\([^)]*\)[\s\S]*?return\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[/g;
+  const findFuncRe =
+    /def\s+find\s*\([^)]*\)[\s\S]*?return\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[/g;
   while ((m = findFuncRe.exec(code)) !== null) {
     const v = m[1];
-    if (varNames.includes(v) && !existing[v] && !extra[v]) extra[v] = "UNIONFIND";
+    if (varNames.includes(v) && !existing[v] && !extra[v])
+      extra[v] = "UNIONFIND";
   }
 
   // DISTANCE: 최단거리 배열 — [INF] * n 또는 float('inf')로 초기화
-  const distInitRe = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\[(?:INF|float\s*\(\s*['"]inf['"]\s*\)|10\s*\*\s*\*\s*\d+|1e\d+|987654321|999999999)[^\]]*\]\s*\*\s*\w/g;
+  const distInitRe =
+    /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\[(?:INF|float\s*\(\s*['"]inf['"]\s*\)|10\s*\*\s*\*\s*\d+|1e\d+|987654321|999999999)[^\]]*\]\s*\*\s*\w/g;
   while ((m = distInitRe.exec(code)) !== null) {
     const v = m[1];
-    if (varNames.includes(v) && !existing[v] && !extra[v]) extra[v] = "DISTANCE";
+    if (varNames.includes(v) && !existing[v] && !extra[v])
+      extra[v] = "DISTANCE";
   }
 
   // STACK: list로 .append() + .pop() 로 쓰이는 변수 (LIFO)
@@ -573,22 +671,33 @@ function enrichSpecialVarKinds(
   const appendRe = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*append\s*\(/g;
   while ((m = appendRe.exec(code)) !== null) {
     const v = m[1];
-    if (varNames.includes(v) && !existing[v] && !extra[v]) stackCandidates.add(v);
+    if (varNames.includes(v) && !existing[v] && !extra[v])
+      stackCandidates.add(v);
   }
   for (const v of stackCandidates) {
     const hasPop = new RegExp(`\\b${v}\\s*\\.\\s*pop\\s*\\(`).test(code);
-    const hasPopleft = new RegExp(`\\b${v}\\s*\\.\\s*popleft\\s*\\(`).test(code);
-    const hasHeapOp = new RegExp(`heapq\\s*\\.\\s*(?:heappush|heappop)\\s*\\(\\s*${v}\\b`).test(code);
-    const hasTopAccess = new RegExp(`\\b${v}\\s*\\[\\s*-\\s*1\\s*\\]`).test(code);
-    if ((hasPop || hasTopAccess) && !hasPopleft && !hasHeapOp) extra[v] = "STACK";
+    const hasPopleft = new RegExp(`\\b${v}\\s*\\.\\s*popleft\\s*\\(`).test(
+      code,
+    );
+    const hasHeapOp = new RegExp(
+      `heapq\\s*\\.\\s*(?:heappush|heappop)\\s*\\(\\s*${v}\\b`,
+    ).test(code);
+    const hasTopAccess = new RegExp(`\\b${v}\\s*\\[\\s*-\\s*1\\s*\\]`).test(
+      code,
+    );
+    if ((hasPop || hasTopAccess) && !hasPopleft && !hasHeapOp)
+      extra[v] = "STACK";
   }
 
   // VISITED: bool/0-1 배열 — [False]*n 또는 [0]*n 으로 초기화되고 visited[node]=True 패턴
-  const visitedInitRe = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\[\s*(?:False|0)\s*\]\s*\*\s*\w/g;
+  const visitedInitRe =
+    /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\[\s*(?:False|0)\s*\]\s*\*\s*\w/g;
   while ((m = visitedInitRe.exec(code)) !== null) {
     const v = m[1];
     if (!varNames.includes(v) || existing[v] || extra[v]) continue;
-    const hasVisitedSet = new RegExp(`\\b${v}\\s*\\[\\s*\\w+\\s*\\]\\s*=\\s*(?:True|1)`).test(code);
+    const hasVisitedSet = new RegExp(
+      `\\b${v}\\s*\\[\\s*\\w+\\s*\\]\\s*=\\s*(?:True|1)`,
+    ).test(code);
     if (hasVisitedSet) extra[v] = "VISITED";
   }
 
@@ -604,7 +713,7 @@ function enrichSpecialVarKinds(
 function enrichLinearPivots(
   meta: AnalyzeMetadata,
   code: string,
-  varTypes: Record<string, string>
+  varTypes: Record<string, string>,
 ): AnalyzeMetadata {
   if (meta.linear_pivots && meta.linear_pivots.length > 0) return meta;
 
@@ -620,7 +729,9 @@ function enrichLinearPivots(
   for (const arrVar of listVars) {
     const indexedVars: string[] = [];
     for (const intVar of intVars) {
-      const usedAsIndex = new RegExp(`\\b${arrVar}\\s*\\[\\s*${intVar}\\s*\\]`).test(code);
+      const usedAsIndex = new RegExp(
+        `\\b${arrVar}\\s*\\[\\s*${intVar}\\s*\\]`,
+      ).test(code);
       if (!usedAsIndex) continue;
       const changes = new RegExp(`\\b${intVar}\\s*[+\\-]?=`).test(code);
       if (changes) indexedVars.push(intVar);
@@ -641,7 +752,7 @@ function enrichLinearPivots(
 async function analyzeWithAi(
   code: string,
   varTypes: Record<string, string>,
-  language = "python"
+  language = "python",
 ) {
   const chain = buildChain();
   if (chain.length === 0) throw new Error("NO_AI_PROVIDER_KEY");
@@ -715,7 +826,7 @@ async function analyzeWithAi(
     "해당 없으면 {}.",
     "",
     "출력 JSON 스키마:",
-    '{"algorithm":"string","display_name":"string","strategy":"GRID|LINEAR|GRID_LINEAR|GRAPH","tags":["string"],"detected_data_structures":["string"],"detected_algorithms":["string"],"summary":"string","graph_mode":"directed|undirected","graph_var_name":"string","graph_representation":"GRID|MAP","uses_bitmasking":"boolean","time_complexity":"string","key_vars":["string"],"var_mapping":{"ROLE":{"var_name":"string","panel":"GRID|LINEAR|GRAPH|VARIABLES"}},"linear_pivots":[{"var_name":"string","badge":"string","indexes_1d_var":"string","pivot_mode":"index|value_in_array"}],"linear_context_var_names":["string"],"special_var_kinds":{"var_name":"HEAP|QUEUE|STACK|DEQUE|UNIONFIND|VISITED|DISTANCE|PARENT_TREE"}}',
+    '{"algorithm":"string","display_name":"string","strategy":"GRID|LINEAR|GRID_LINEAR|GRAPH","key_vars":["string"],"var_mapping_list":[{"role":"string","var_name":"string","panel":"GRID|LINEAR|GRAPH|VARIABLES"}],"tags":["string"],"detected_data_structures":["string"],"detected_algorithms":["string"],"graph_mode":"directed|undirected","graph_var_name":"string","graph_representation":"GRID|MAP","uses_bitmasking":"boolean","time_complexity":"string","linear_pivots":[{"var_name":"string","badge":"string","indexes_1d_var":"string","pivot_mode":"index|value_in_array"}],"linear_context_var_names":["string"],"special_var_kinds":{"var_name":"HEAP|QUEUE|STACK|DEQUE|UNIONFIND|VISITED|DISTANCE|PARENT_TREE"},"summary":"string"}',
     "",
     `[code]\n${compactCode}`,
     "",
@@ -724,7 +835,7 @@ async function analyzeWithAi(
 
   const geminiOpts: GeminiOptions = {
     responseSchema: ANALYZE_GEMINI_SCHEMA,
-    maxOutputTokens: 900
+    maxOutputTokens: 8192,
   };
 
   const parseAndPostProcess = (raw: string) => {
@@ -848,8 +959,11 @@ export async function POST(req: NextRequest) {
       "Stack:",
       error instanceof Error ? error.stack : "",
     );
-    return NextResponse.json(fallbackAnalyzeMetadata(varTypes, code, language), {
-      status: 200,
-    });
+    return NextResponse.json(
+      fallbackAnalyzeMetadata(varTypes, code, language),
+      {
+        status: 200,
+      },
+    );
   }
 }
