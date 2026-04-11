@@ -22,8 +22,6 @@ import {
   enrichLinearPivots,
 } from "./_lib";
 
-
-
 async function analyzeWithAi(
   code: string,
   varTypes: Record<string, string>,
@@ -140,8 +138,6 @@ async function analyzeWithAi(
   const raw = await callWithFallback(prompt, chain, geminiOpts);
   return parseAndPostProcess(raw);
 }
-
-
 
 export async function POST(req: NextRequest) {
   let code = "";
