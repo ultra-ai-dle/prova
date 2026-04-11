@@ -91,9 +91,9 @@ it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다')
 
 #### 2A. 언어 감지
 
-- [ ] `src/lib/languageDetection.ts` 생성
-- [ ] `page.tsx` → `PY_KEYWORDS`(L129), `JS_KEYWORDS`(L167), `PYTHON_LANGUAGE_HINTS`(L212), `JAVASCRIPT_LANGUAGE_HINTS`(L229), `detectLanguageFromCode()`(L246) 추출
-- [ ] 유닛 테스트 작성 → `npm run test` 통과
+- [x] `src/lib/languageDetection.ts` 생성
+- [x] `page.tsx` → `PY_KEYWORDS`, `JS_KEYWORDS`, `PYTHON_LANGUAGE_HINTS`, `JAVASCRIPT_LANGUAGE_HINTS`, `detectLanguageFromCode()` 추출
+- [x] 유닛 테스트 작성 → 23개 통과
 
 #### 2B. 구문 하이라이팅
 
