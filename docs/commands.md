@@ -9,6 +9,7 @@
 | `/commit`         | 변경 분석 + 커밋 메시지 생성 + 커밋 |      X       |  O   |
 | `/test`           | Feature별 테스트 작성               | O (테스트만) |  O   |
 | `/review`         | 코드 품질 검사 + 리팩토링           |      O       |  O   |
+| `/qa`             | Feature별 QA 체크리스트 생성/업데이트 | O (문서만) |  X   |
 | `/docs`           | 문서/주석/JSDoc 업데이트            |  O (문서만)  |  O   |
 | `/pr-ready`       | PR 전 최종 검증 + PR Body 생성      |      X       |  X   |
 | `/prompt-diff`    | AI 프롬프트 계약 회귀 검증          |      X       |  X   |
@@ -23,7 +24,8 @@
 flowchart LR
     Code[코딩] --> Test["/test"]
     Test --> Review["/review"]
-    Review --> Commit["/commit"]
+    Review --> QA["/qa"]
+    QA --> Commit["/commit"]
     Commit -->|"src/ 변경 시"| ReviewSuggest["💡 /review 제안"]
     Commit --> Docs["/docs"]
     Docs --> PR["/pr-ready"]
@@ -64,7 +66,7 @@ sequenceDiagram
     Dev->>Commit: /commit
     Commit-->>Dev: 💡 /review 실행하시겠습니까?
     Dev->>PR: /pr-ready
-    PR->>PR: tsc → lint → build → /prompt-diff
+    PR->>PR: tsc → build → /prompt-diff
 ```
 
 ## 커맨드 상세
@@ -85,6 +87,12 @@ feature 소스 + 테스트의 품질을 검사하고 리팩토링한다. </br>
 타입 안전성, 에러 핸들링, 코드 구조, 네이밍, 테스트 품질을 점검한다.
 동작 변경 없이 품질만 개선한다.
 
+### 📌 /qa `[feature]`
+
+지정 feature의 코드를 분석하여 사용자 관점의 QA 체크리스트를 `docs/qa/{feature}.md`에 생성/업데이트한다. </br>
+정상 동작, 엣지 케이스, 에러 케이스, UI 상태 4개 카테고리로 분류한다. </br>
+기존 체크 상태(`[x]`)는 업데이트 시에도 유지된다. 인자 생략 시 변경된 feature를 자동 감지한다.
+
 ### 📌 /docs `[영역]`
 
 변경된 코드 기반으로 아키텍처 문서, JSDoc, API 주석을 업데이트한다. </br>
@@ -92,7 +100,7 @@ feature 소스 + 테스트의 품질을 검사하고 리팩토링한다. </br>
 
 ### 📌 /pr-ready `[base]`
 
-PR 제출 전 최종 검증. 순차로 tsc → lint → build → prompt-diff를 실행한다. </br>
+PR 제출 전 최종 검증. 순차로 tsc → build → prompt-diff를 실행한다. </br>
 모든 게이트 통과 시 PR Body를 생성한다. 코드를 수정하지 않는다.
 
 ### 📌 /prompt-diff `[endpoint]`
