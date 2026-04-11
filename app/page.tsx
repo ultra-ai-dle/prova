@@ -8,6 +8,8 @@ import { AnalyzeMetadata, RawTraceStep } from "@/types/prova";
 import { useProvaStore } from "@/store/useProvaStore";
 import { resolveGraphMode } from "@/lib/graphModeInference";
 import { normalizeAndDedupeTags } from "@/lib/tagNormalize";
+import { GuidedTour } from "@/features/tour/GuidedTour";
+import { useTourStore } from "@/features/tour/useTourStore";
 
 /* ── SVG Icons ─────────────────────────────────────────── */
 const IconFiles = () => (
@@ -910,7 +912,7 @@ export default function Page() {
       )}
 
       {/* ── Header ──────────────────────────────────────────── */}
-      <header className="shrink-0 h-11 bg-[#161b22] border-b border-prova-line flex items-center px-3 gap-4">
+      <header data-tour="header" className="shrink-0 h-11 bg-[#161b22] border-b border-prova-line flex items-center px-3 gap-4">
         {/* Logo */}
         <div className="font-bold text-[15px] tracking-tight shrink-0">
           Pro<span className="text-prova-green">va</span>
@@ -927,8 +929,9 @@ export default function Page() {
 
         <button
           className="w-7 h-7 flex items-center justify-center rounded text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors shrink-0"
-          aria-label="설정"
-          title="설정"
+          aria-label="가이드 투어 다시보기"
+          title="가이드 투어 다시보기"
+          onClick={() => useTourStore.getState().startTour()}
         >
           <IconSettings />
         </button>
@@ -940,7 +943,7 @@ export default function Page() {
         {/* 3-column main area (resizable) */}
         <div ref={splitRootRef} className="flex-1 flex min-h-0 min-w-0">
           {/* ── Code Editor ───────────────────────────── */}
-          <section className="min-h-0 flex flex-col min-w-0" style={{ width: `${paneWidths.left}%` }}>
+          <section data-tour="editor" className="min-h-0 flex flex-col min-w-0" style={{ width: `${paneWidths.left}%` }}>
             {/* Section header */}
             <div className={`shrink-0 h-9 flex items-center justify-between px-3 border-b transition-colors ${
               isDebugMode
@@ -963,6 +966,7 @@ export default function Page() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <select
+                  data-tour="language"
                   className="h-7 rounded border border-prova-line bg-[#161b22] text-[11px] text-[#c9d1d9] px-2 focus:outline-none"
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}
@@ -1215,7 +1219,7 @@ export default function Page() {
           />
 
           {/* ── Visualization ─────────────────────────── */}
-          <section className="min-h-0 flex flex-col min-w-0" style={{ width: `${paneWidths.center}%` }}>
+          <section data-tour="visualization" className="min-h-0 flex flex-col min-w-0" style={{ width: `${paneWidths.center}%` }}>
             <div className="shrink-0 min-h-9 flex items-center justify-between gap-2 px-3 py-1.5 border-b border-prova-line bg-[#0f141a]">
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium shrink-0">
@@ -1348,7 +1352,7 @@ export default function Page() {
             style={{ width: `${paneWidths.right}%` }}
           >
             {/* Debug controls */}
-            <div className="shrink-0 border-b border-prova-line bg-[#0f141a] px-3 py-2 space-y-2">
+            <div data-tour="debug-controls" className="shrink-0 border-b border-prova-line bg-[#0f141a] px-3 py-2 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium">
                   Debug Controls
@@ -1417,7 +1421,7 @@ export default function Page() {
 
             <div className="flex-1 min-h-0 flex flex-col">
               {/* Variable group */}
-              <div className="min-h-0 flex flex-col" style={{ height: `${rightHeights.variable}%` }}>
+              <div data-tour="variables" className="min-h-0 flex flex-col" style={{ height: `${rightHeights.variable}%` }}>
                 <div className="shrink-0 h-9 flex items-center justify-between px-3 border-b border-prova-line bg-[#0f141a]">
                   <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium">
                     Variable Monitor
@@ -1477,7 +1481,7 @@ export default function Page() {
               />
 
               {/* Input group */}
-              <div className="min-h-0 flex flex-col" style={{ height: `${rightHeights.input}%` }}>
+              <div data-tour="input" className="min-h-0 flex flex-col" style={{ height: `${rightHeights.input}%` }}>
                 <div className="shrink-0 h-9 flex items-center justify-between px-3 border-y border-prova-line bg-[#0f141a]">
                   <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium">
                     Input
@@ -1607,6 +1611,9 @@ export default function Page() {
           </div>
         ))}
       </div>
+
+      {/* ── Guided Tour ───────────────────────────────────────── */}
+      <GuidedTour />
     </div>
   );
 }
