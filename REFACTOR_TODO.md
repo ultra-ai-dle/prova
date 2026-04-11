@@ -9,45 +9,45 @@
 
 ### 잘 구조화된 파일 (변경 불필요)
 
-| 파일 | 줄수 | 판단 근거 |
-|------|------|----------|
-| `src/store/useProvaStore.ts` | 109 | 순수 상태관리, 단일 책임 |
-| `src/features/execution/runtime.ts` | 97 | Worker 래퍼, 단일 책임 |
-| `src/features/trace/merge.ts` | 22 | 순수 병합 함수 |
-| `src/features/visualization/callTreeBuilder.ts` | 220 | 트리 구축 유틸 |
-| `src/features/visualization/CallTreePanel.tsx` | 228 | 단일 컴포넌트 |
-| `src/features/visualization/linearPointerHelpers.ts` | 127 | 포인터 유틸 |
-| `src/lib/ai-providers.ts` | 429 | 프로바이더 체인 (줄수 많으나 단일 책임) |
-| `src/lib/analyzeCache.ts` | 131 | LRU 캐시 |
-| `src/lib/tagNormalize.ts` | 26 | 태그 정규화 |
-| `src/lib/graphModeInference.ts` | 47 | 그래프 방향 추론 |
-| `src/lib/partitionPivotEnrichment.ts` | 74 | 피벗 보강 |
+| 파일                                                 | 줄수 | 판단 근거                               |
+| ---------------------------------------------------- | ---- | --------------------------------------- |
+| `src/store/useProvaStore.ts`                         | 109  | 순수 상태관리, 단일 책임                |
+| `src/features/execution/runtime.ts`                  | 97   | Worker 래퍼, 단일 책임                  |
+| `src/features/trace/merge.ts`                        | 22   | 순수 병합 함수                          |
+| `src/features/visualization/callTreeBuilder.ts`      | 220  | 트리 구축 유틸                          |
+| `src/features/visualization/CallTreePanel.tsx`       | 228  | 단일 컴포넌트                           |
+| `src/features/visualization/linearPointerHelpers.ts` | 127  | 포인터 유틸                             |
+| `src/lib/ai-providers.ts`                            | 429  | 프로바이더 체인 (줄수 많으나 단일 책임) |
+| `src/lib/analyzeCache.ts`                            | 131  | LRU 캐시                                |
+| `src/lib/tagNormalize.ts`                            | 26   | 태그 정규화                             |
+| `src/lib/graphModeInference.ts`                      | 47   | 그래프 방향 추론                        |
+| `src/lib/partitionPivotEnrichment.ts`                | 74   | 피벗 보강                               |
 
 ---
 
 ## 리팩토링 대상 파일
 
-| 파일 | 줄수 | 문제 유형 | 분리 계획 | 우선순위 |
-|------|------|----------|----------|---------|
-| `app/page.tsx` | 2,381 | 인라인 SVG 6개, 유틸/상수/훅 혼재 | icons.tsx + 7개 lib + 4개 hooks 분리 | 1~3순위 |
-| `GraphPanel.tsx` | 1,996 | 인라인 SVG (뷰 내), 8개 특수뷰 내장, 감지/포맷 중복 | specialViews/ + graphHelpers + 공유 lib | 1~3순위 |
-| `ThreeDVolumePanel.tsx` | 1,191 | 인라인 SVG 4개 아이콘 | icons.tsx로 분리 | 1순위 |
-| `analyze/route.ts` | 969 | 파싱/정규화/보강 혼재, 타입 누출 | 4개 lib 분리 | 2~4순위 |
-| `GridLinearPanel.tsx` | 449 | 인라인 SVG 1개, 배열감지 중복 | icons.tsx + dataDetection 공유 | 1~2순위 |
-| `TimelineControls.tsx` | 149 | 인라인 SVG 1개 | icons.tsx로 분리 | 1순위 |
+| 파일                    | 줄수  | 문제 유형                                           | 분리 계획                               | 우선순위 |
+| ----------------------- | ----- | --------------------------------------------------- | --------------------------------------- | -------- |
+| `app/page.tsx`          | 2,381 | 인라인 SVG 6개, 유틸/상수/훅 혼재                   | icons.tsx + 7개 lib + 4개 hooks 분리    | 1~3순위  |
+| `GraphPanel.tsx`        | 1,996 | 인라인 SVG (뷰 내), 8개 특수뷰 내장, 감지/포맷 중복 | specialViews/ + graphHelpers + 공유 lib | 1~3순위  |
+| `ThreeDVolumePanel.tsx` | 1,191 | 인라인 SVG 4개 아이콘                               | icons.tsx로 분리                        | 1순위    |
+| `analyze/route.ts`      | 969   | 파싱/정규화/보강 혼재, 타입 누출                    | 4개 lib 분리                            | 2~4순위  |
+| `GridLinearPanel.tsx`   | 449   | 인라인 SVG 1개, 배열감지 중복                       | icons.tsx + dataDetection 공유          | 1~2순위  |
+| `TimelineControls.tsx`  | 149   | 인라인 SVG 1개                                      | icons.tsx로 분리                        | 1순위    |
 
 ---
 
 ## 중복 코드 목록
 
-| 중복 대상 | 위치 | 통합 방안 |
-|----------|------|----------|
-| `stripCodeFence()` / `stripFence()` | `analyze/route.ts:55` + `explain/route.ts:51` | `src/lib/jsonParsing.ts` |
-| `is2DArray()` | `GraphPanel.tsx:349` + `GridLinearPanel.tsx` | `src/lib/dataDetection.ts` |
-| `is2DBitmaskGrid()` | `GraphPanel.tsx:1191` + `GridLinearPanel.tsx` | `src/lib/dataDetection.ts` |
-| `highlightPythonLine()` / `highlightJsLine()` | `page.tsx:331` + `page.tsx:292` (80% 동일) | `src/lib/syntaxHighlight.ts` |
-| `formatScalar()` / `formatCellValue()` | `GraphPanel.tsx:362` + `GridLinearPanel.tsx` | `src/lib/formatValue.ts` |
-| `toFiniteNumber()` / `toNumber()` | `GraphPanel.tsx:187` + `ThreeDVolumePanel.tsx` | `src/lib/formatValue.ts` |
+| 중복 대상                                     | 위치                                           | 통합 방안                    |
+| --------------------------------------------- | ---------------------------------------------- | ---------------------------- |
+| `stripCodeFence()` / `stripFence()`           | `analyze/route.ts:55` + `explain/route.ts:51`  | `src/lib/jsonParsing.ts`     |
+| `is2DArray()`                                 | `GraphPanel.tsx:349` + `GridLinearPanel.tsx`   | `src/lib/dataDetection.ts`   |
+| `is2DBitmaskGrid()`                           | `GraphPanel.tsx:1191` + `GridLinearPanel.tsx`  | `src/lib/dataDetection.ts`   |
+| `highlightPythonLine()` / `highlightJsLine()` | `page.tsx:331` + `page.tsx:292` (80% 동일)     | `src/lib/syntaxHighlight.ts` |
+| `formatScalar()` / `formatCellValue()`        | `GraphPanel.tsx:362` + `GridLinearPanel.tsx`   | `src/lib/formatValue.ts`     |
+| `toFiniteNumber()` / `toNumber()`             | `GraphPanel.tsx:187` + `ThreeDVolumePanel.tsx` | `src/lib/formatValue.ts`     |
 
 ---
 
@@ -64,9 +64,9 @@
 
 ```typescript
 // 예시
-it('mergeTrace는 annotated가 짧을 때 EMPTY_ANNOTATED로 패딩한다')
-it('stripCodeFence는 마크다운 코드 블록을 제거한다')
-it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다')
+it('mergeTrace는 annotated가 짧을 때 EMPTY_ANNOTATED로 패딩한다');
+it('stripCodeFence는 마크다운 코드 블록을 제거한다');
+it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다');
 ```
 
 ### Phase 0: 테스트 환경 세팅
@@ -139,20 +139,41 @@ it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다')
 
 ### Phase 3: 비즈니스 로직 / 훅 분리 (3순위)
 
+#### 작성 규칙
+
+- 코드 내용 수정 없이 추출만 한다 — 리팩토링/개선은 별도 작업
+- 컴포넌트와 관련 헬퍼 함수를 함께 이동한다 (예: `HeapTreeView` + `computeHeapPositions()`)
+- 뷰 내부에서만 쓰이는 SVG(화살표, 연결선 등)는 `specialViews/icons.tsx`로 분리하고 각 뷰에서 import
+- 훅 추출 시 useEffect 의존성 배열을 그대로 유지한다 — 의존성 정리는 별도 작업
+- 서브태스크 하나 완료할 때마다 `npm run build` + 해당 기능 수동 QA
+- QA 실패 시 즉시 멈추고 보고
+
+#### 서브태스크별 QA 체크리스트
+
+| 서브태스크                  | QA 항목                                          |
+| --------------------------- | ------------------------------------------------ |
+| 3A. 특수뷰 분리             | HEAP/QUEUE/STACK 중 1개 시각화 렌더 확인         |
+| 3B. 그래프 헬퍼             | 그래프 시각화 1개 — 노드/엣지 렌더 + 스텝 이동   |
+| 3C-1. useKeyboardNavigation | 방향키 ← → 스텝 이동                             |
+| 3C-2. usePlaybackTimer      | 재생 → 자동 진행 → 정지                          |
+| 3C-3. useDragResize         | 패널 경계 드래그                                 |
+| 3C-4. useProvaExecution     | 코드 입력 → Run → 결과 (E2E, 가장 마지막에 진행) |
+
 #### 3A. 특수 자료구조 뷰 (GraphPanel에서 분리)
 
-- [ ] `src/features/visualization/specialViews/` 디렉토리 생성
-- [ ] `HeapTreeView` + `computeHeapPositions()` → `specialViews/HeapTreeView.tsx`
-- [ ] `QueueView` → `specialViews/QueueView.tsx`
-- [ ] `StackView` → `specialViews/StackView.tsx`
-- [ ] `DequeView` → `specialViews/DequeView.tsx`
-- [ ] `UnionFindView` + `buildUFForest()` + `layoutUFForest()` → `specialViews/UnionFindView.tsx`
-- [ ] `VisitedView` → `specialViews/VisitedView.tsx`
-- [ ] `DistanceView` → `specialViews/DistanceView.tsx`
-- [ ] `ParentTreeView` → `specialViews/ParentTreeView.tsx`
-- [ ] `specialViews/index.ts` barrel 파일 생성
-- [ ] `GraphPanel.tsx`에서 제거 + import 교체
-- [ ] `npm run build` 통과 확인
+- [x] `specialViews/types.ts` — `GraphStepState` 타입 분리 (GraphPanel + 뷰 공유)
+- [x] `HeapTreeView.tsx` — `computeHeapPositions()` + `toNodeId()` 함께 이동
+- [x] `QueueView.tsx`
+- [x] `StackView.tsx`
+- [x] `DequeView.tsx`
+- [x] `UnionFindView.tsx` — `buildUFForest()` + `layoutUFForest()` 함께 이동 (export)
+- [x] `VisitedView.tsx`
+- [x] `DistanceView.tsx` — `INF_THRESHOLD` 상수 함께 이동
+- [x] `ParentTreeView.tsx` — `layoutUFForest`를 UnionFindView에서 import
+- [x] `index.ts` barrel 파일 생성
+- [x] `GraphPanel.tsx`에서 590줄 제거 + import 교체
+- [x] `npm run build` 통과 확인
+- [x] 수동 QA: HEAP/QUEUE/STACK 중 1개 시각화 렌더 확인
 
 #### 3B. 그래프 헬퍼
 
@@ -192,14 +213,14 @@ it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다')
 
 ## 예상 결과
 
-| 파일 | Before | After | 감소량 |
-|------|--------|-------|--------|
-| `app/page.tsx` | 2,381 | ~1,000 | -1,381 |
-| `GraphPanel.tsx` | 1,996 | ~1,000 | -996 |
-| `analyze/route.ts` | 969 | ~200 | -769 |
-| `GridLinearPanel.tsx` | 449 | ~350 | -99 |
-| `ThreeDVolumePanel.tsx` | 1,191 | ~1,150 | -41 |
-| `TimelineControls.tsx` | 149 | ~140 | -9 |
+| 파일                    | Before | After  | 감소량 |
+| ----------------------- | ------ | ------ | ------ |
+| `app/page.tsx`          | 2,381  | ~1,000 | -1,381 |
+| `GraphPanel.tsx`        | 1,996  | ~1,000 | -996   |
+| `analyze/route.ts`      | 969    | ~200   | -769   |
+| `GridLinearPanel.tsx`   | 449    | ~350   | -99    |
+| `ThreeDVolumePanel.tsx` | 1,191  | ~1,150 | -41    |
+| `TimelineControls.tsx`  | 149    | ~140   | -9     |
 
 신규 파일: ~19개 (icons 1 + lib 10 + hooks 4 + specialViews 8+1 barrel - 중복 제외)
 
@@ -223,6 +244,7 @@ it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다')
 - [ ] **`detectIndentSize` 탭 문자 무시 버그** — `/^( +)/`로 공백만 매칭하여 탭(`\t`)으로 들여쓴 코드는 GCD 계산에서 제외됨. 탭 들여쓰기 코드를 붙여넣으면 indent 크기 감지가 작동하지 않아 자동 변환이 트리거되지 않음. (`src/lib/textUtils.ts`)
 
 ### 리팩토링 중 발견된 버그 처리 원칙
+
 - 테스트는 **현재 동작**(버그 포함)에 맞춰 작성하고, 테스트 내에 TODO 주석으로 버그를 표시한다
 - 소스 코드의 버그 위치에도 TODO 주석을 남긴다
 - 이 섹션에 버그 체크리스트를 추가한다
