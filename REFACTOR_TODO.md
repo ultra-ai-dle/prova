@@ -126,10 +126,10 @@ it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다')
 
 #### 2F. 데이터 감지 (패널 공유)
 
-- [ ] `src/lib/dataDetection.ts` 생성
-- [ ] `GraphPanel.tsx` → `is2DArray()`(L349), `is1DArray()`(L352), `to2D()`(L355), `looksLike2DScalarTableGrid()`(L482), `is2DRectangularCellGrid()`(L501), `detectGraphLike()`(L516), `isClearlyGridLike()`(L533), `isDirectionVectorTuple()`(L549), `isDirectionVectorListLike()`(L556), `isDirectionMapLike()`(L568), `canGraphLikeUseGridView()`(L576), `is3DBooleanStateGrid()`(L1177), `is2DBitmaskGrid()`(L1191), `inferBitWidthFromGrid()`(L1203), `expand2DBitmaskGridTo3D()`(L1214) 추출
-- [ ] `GridLinearPanel.tsx` → 중복 함수 제거, `dataDetection.ts` import로 교체
-- [ ] 유닛 테스트 작성 → `npm run test` 통과
+- [x] `src/lib/dataDetection.ts` 생성 (17개 함수: 배열 판별, 격자 감지, 그래프/그리드 판별, 방향 벡터, 3D/비트마스크)
+- [x] `GraphPanel.tsx` → 15개 감지 함수 추출 + `getPositiveMaxInGrid`, `getGridCellTone` 포함
+- [x] `GridLinearPanel.tsx` → `is2DArray`, `bitWidthFromGrid`→`inferBitWidthFromGrid`, `expand2DBitmaskGridTo3D` 공유 import 교체 (`is2DBitmaskGrid`는 구현 차이로 유지)
+- [x] 유닛 테스트 작성 → 59개 통과
 
 #### 2G. 텍스트 유틸
 

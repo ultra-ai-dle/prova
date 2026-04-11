@@ -9,6 +9,7 @@ import {
   type LinearPointerMap
 } from "@/features/visualization/linearPointerHelpers";
 import { formatCellValue } from "@/lib/formatValue";
+import { is2DArray, inferBitWidthFromGrid, expand2DBitmaskGridTo3D } from "@/lib/dataDetection";
 
 type Props = {
   step: MergedTraceStep | null;
@@ -35,10 +36,6 @@ type Props = {
     onSpeedChange: (speed: number) => void;
   };
 };
-
-function is2DArray(value: unknown): value is unknown[][] {
-  return Array.isArray(value) && Array.isArray(value[0]);
-}
 
 function isScalar(value: unknown) {
   return value == null || ["number", "string", "boolean"].includes(typeof value);
@@ -74,32 +71,13 @@ function is2DBitmaskGrid(value: unknown): value is number[][] {
     );
 }
 
-function bitWidthFromGrid(grid: number[][], fallback = 1, cap = 64) {
-  let maxValue = 0;
-  for (const row of grid) {
-    for (const cell of row) {
-      if (cell > maxValue) maxValue = cell;
-    }
-  }
-  const inferred = maxValue > 0 ? Math.floor(Math.log2(maxValue)) + 1 : 1;
-  return Math.max(1, Math.min(cap, Math.max(fallback, inferred)));
-}
-
-function expand2DBitmaskGridTo3D(grid: number[][], bits: number): unknown[][][] {
-  return grid.map((row) =>
-    row.map((mask) =>
-      Array.from({ length: bits }, (_, k) => Boolean(mask & (1 << k)))
-    )
-  );
-}
-
 function getBitmaskGridAs3DVar(step: MergedTraceStep, bitWidth = 1) {
   const entries = Object.entries(step.vars);
   const candidate = entries.find(([, value]) => is2DBitmaskGrid(value));
   if (!candidate) return null;
   const [name, value] = candidate;
   const grid = value as number[][];
-  const width = bitWidthFromGrid(grid, bitWidth, 64);
+  const width = inferBitWidthFromGrid(grid, bitWidth, 64);
   return { name, value: expand2DBitmaskGridTo3D(grid, width) };
 }
 
