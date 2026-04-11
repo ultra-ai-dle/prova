@@ -177,9 +177,10 @@ it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다');
 
 #### 3B. 그래프 헬퍼
 
-- [ ] `src/features/visualization/graphHelpers.ts` 생성
-- [ ] `GraphPanel.tsx` → 타입(`GraphNode`, `GraphLink`, `SimNode`, `SimLink`, `GraphStepState`, `LinkVisual`), `linkStyleForStep()`(L58), `nodePalette()`(L87), `toNodeId()`(L196), `pushVisitedFromValue()`(L203), `extractResultOrder()`(L229), `deriveGraphStepState()`(L256), `getSimLinkEndId()`(L335), `topologySignature()`(L340), `shortenEdgeEndpoints()`(L97), `svgSafeId()`(L121), `getPositiveMaxInGrid()`(L442), `getGridCellTone()`(L452), `GraphLegendOverlay`(L125) 추출
-- [ ] `npm run build` 통과 확인
+- [x] `graphHelpers.tsx` 생성 — 5개 타입 + `GRAPH_NODE_R` 상수 + 11개 함수 + `GraphLegendOverlay` 컴포넌트
+- [x] `GraphPanel.tsx`에서 288줄 제거 + import 교체 (`getPositiveMaxInGrid`/`getGridCellTone`은 이미 dataDetection.ts에 있어 제외)
+- [x] `npm run build` 통과 확인
+- [x] 수동 QA: 그래프 시각화 1개 — 노드/엣지 렌더 + 스텝 이동
 
 #### 3C. 커스텀 훅 (page.tsx에서 분리)
 
