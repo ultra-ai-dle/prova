@@ -25,6 +25,16 @@ flowchart LR
 | `/api/analyze` | `{code, varTypes, language?}` | `AnalyzeMetadata` (JSON) | app/api/analyze/route.ts |
 | `/api/explain` | `{rawTrace, algorithm, strategy}` | SSE stream: `{index, chunk}` | app/api/explain/route.ts |
 
+### analyze 서브모듈 (`app/api/analyze/_lib/`)
+
+| 파일 | 역할 |
+|---|---|
+| `prompt.ts` | 상수(`ANALYZE_CODE_CHAR_LIMIT`, `ANALYZE_GEMINI_SCHEMA`), `compactCodeForAnalyze`, `compactVarTypes` |
+| `normalize.ts` | `normalizeResponse` (AI 응답 → `AnalyzeMetadata`), `fallbackAnalyzeMetadata`, `parseLinearPivots` |
+| `enrichment.ts` | 코드 패턴 보강 6개 (`applyDequeHints`, `enrichSpecialVarKinds` 등) + detect 헬퍼 |
+| `partitionPivotEnrichment.ts` | 퀵소트 피벗 감지 → `pivot_mode: value_in_array` 보강 |
+| `index.ts` | barrel re-export |
+
 ## AI 프로바이더 체인
 
 ```mermaid
@@ -43,10 +53,14 @@ flowchart TD
 
 ## Analyze 후처리 (코드 패턴 보강)
 
-AI 응답 후 정규식 기반으로 추가 보강:
-- `enrichSpecialVarKinds()` — heapq, deque, path compression, distance init, visited 패턴 감지
+AI 응답 후 정규식 기반으로 추가 보강 (`_lib/enrichment.ts`):
+- `enrichSpecialVarKinds()` — heapq, deque, path compression, distance init, visited, stack 패턴 감지
 - `enrichLinearPivots()` — two-pointer 패턴 감지
-- `applyDequeHints()`, `applyJsArrayHints()`, `applyDirectionMapGuards()`
+- `applyDequeHints()` — Python deque → QUEUE/STACK/DEQUE 분류
+- `applyJsArrayHints()` — JS push/pop/shift/unshift → STACK/QUEUE 분류
+- `applyDirectionMapGuards()` — 방향 벡터 맵 var_mapping 제거
+- `applyGraphModeInference()` — graph_mode 미지정 시 코드 패턴으로 추론
+- `enrichAnalyzeMetadataWithPartitionValuePivots()` — 퀵소트 피벗 감지 (`_lib/partitionPivotEnrichment.ts`)
 
 ## Explain 청크 전략
 

@@ -49,10 +49,13 @@ flowchart TD
 | 경계 | 입력 | 출력 | 파일 |
 |---|---|---|---|
 | Worker → Store | postMessage | `WorkerDonePayload` | runtime.ts, *.worker.js |
-| Store → Analyze API | code + varTypes | `AnalyzeMetadata` | /api/analyze/route.ts |
+| Store → Analyze API | code + varTypes | `AnalyzeMetadata` | /api/analyze/route.ts + _lib/ |
 | Store → Explain API | rawTrace + metadata | `AnnotatedStep[]` (SSE) | /api/explain/route.ts |
 | Merge | raw + annotated | `MergedTraceStep[]` | trace/merge.ts |
-| Store → UI | mergedTrace[step] | 렌더링 | *Panel.tsx |
+| Store → UI | mergedTrace[step] | 렌더링 | *Panel.tsx, specialViews/, graphHelpers.tsx |
+| 실행 파이프라인 | language, codeRef | runtimeRef | src/hooks/useProvaExecution.ts |
+| 재생/내비게이션 | playback state | — | src/hooks/usePlaybackTimer.ts, useKeyboardNavigation.ts |
+| 패널 드래그 | setter | ref 5개 | src/hooks/useDragResize.ts |
 
 ## 핵심 제약
 

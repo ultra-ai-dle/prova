@@ -23,6 +23,14 @@ flowchart TD
 | GRID_LINEAR | GridLinearPanel | 2D + 1D 혼합 | GRID + LINEAR 동시 사용 |
 | GRAPH | GraphPanel | 그래프/트리 구조 | `graph[u].append(v)` 패턴 |
 
+### GraphPanel 서브모듈
+
+| 파일 | 역할 |
+|---|---|
+| `graphHelpers.tsx` | 타입(`GraphNode`, `SimNode` 등), 스타일(`nodePalette`, `linkStyleForStep`), SVG 유틸, `deriveGraphStepState`, `GraphLegendOverlay` |
+| `specialViews/` | 특수 자료구조 뷰 8종 — HeapTreeView, QueueView, StackView, DequeView, UnionFindView, VisitedView, DistanceView, ParentTreeView |
+| `specialViews/types.ts` | `GraphStepState` 공유 타입 |
+
 ## 컴포넌트 입력
 
 **공통 props:**

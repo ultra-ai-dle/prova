@@ -1,7 +1,7 @@
 # QA: AI Pipeline
 
-> 마지막 업데이트: 2026-04-11
-> 대상 파일: app/api/analyze/route.ts, app/api/explain/route.ts, src/lib/ai-providers.ts, src/lib/partitionPivotEnrichment.ts, src/lib/graphModeInference.ts, src/lib/tagNormalize.ts
+> 마지막 업데이트: 2026-04-12
+> 대상 파일: app/api/analyze/route.ts, app/api/explain/route.ts, src/lib/ai-providers.ts, src/lib/analyzeCache.ts, src/lib/partitionPivotEnrichment.ts, src/lib/graphModeInference.ts, src/lib/tagNormalize.ts
 
 ## 정상 동작
 - [ ] **알고리즘 분류** — 코드를 실행하면 → AI가 알고리즘을 분류하고 에디터 하단에 태그 배지(예: `#bfs`, `#shortest-path`)가 표시된다
@@ -19,6 +19,8 @@
 - [ ] **방향 벡터 보정** — 방향 벡터 딕셔너리가 그래프로 잘못 분류되면 → 자동 보정되어 변수 패널에 텍스트로 표시된다
 - [ ] **Deque 패턴 감지** — `collections.deque`를 사용하면 → 자동으로 QUEUE/DEQUE 태그와 전용 시각화가 적용된다
 - [ ] **JS 배열 패턴 감지** — JavaScript에서 `push/pop`을 사용하면 → STACK/DFS 태그가 자동 적용된다
+- [ ] **분석 캐시 적용** — 동일한 코드를 다시 실행하면 → AI 호출 없이 캐시된 분석 결과가 즉시 적용되어 분석 대기 시간이 없다
+- [ ] **캐시 만료** — 7일이 지난 분석 캐시는 → 무효화되고 AI가 다시 분석한다
 
 ## 에러 케이스
 - [ ] **AI 분석 실패** — AI 분석이 실패하면 → "AI 분석에 실패했습니다" 토스트가 표시된다

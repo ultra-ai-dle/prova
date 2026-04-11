@@ -1,7 +1,7 @@
 # QA: Visualization
 
-> 마지막 업데이트: 2026-04-11
-> 대상 파일: src/features/visualization/GridLinearPanel.tsx, src/features/visualization/GraphPanel.tsx, src/features/visualization/ThreeDVolumePanel.tsx, src/features/visualization/linearPointerHelpers.ts
+> 마지막 업데이트: 2026-04-12
+> 대상 파일: src/features/visualization/GridLinearPanel.tsx, src/features/visualization/GraphPanel.tsx, src/features/visualization/ThreeDVolumePanel.tsx, src/features/visualization/CallTreePanel.tsx, src/features/visualization/linearPointerHelpers.ts
 
 ## 정상 동작
 
@@ -42,6 +42,14 @@
 - [ ] **3D 네비게이션** — 3D 뷰에서 WASD 키와 마우스 드래그로 → 카메라를 이동/회전할 수 있다
 - [ ] **확장 모드** — Expand 버튼을 클릭하면 → 전체 화면으로 확장되고 드래그 가능한 재생 컨트롤이 표시된다
 - [ ] **한국어 키보드** — 3D 뷰에서 한국어 입력 상태(ㅈ/ㅁ/ㄴ/ㅇ)에서도 → WASD와 동일하게 네비게이션이 동작한다
+
+### Call Tree 패널
+- [ ] **콜 트리 표시** — 재귀 알고리즘을 실행하면 → 함수 호출 계층이 유니코드 트리 커넥터로 표시된다
+- [ ] **노드 상태 구분** — 콜 트리에서 → 현재 실행 노드(금색), 경로상 노드(파란색), 완료 노드(회색)로 구분된다
+- [ ] **활성 노드 표시** — 현재 실행 중인 노드에 → 파란색 깜빡이는 점이 표시된다
+- [ ] **자동 접기** — 완료된 서브트리 중 활성 경로에 없는 것은 → 자동으로 접힌다
+- [ ] **반환값 표시** — 재귀 함수가 반환되면 → 해당 노드에 화살표(→)와 반환값이 표시된다
+- [ ] **스텝 점프** — 콜 트리의 노드를 클릭하면 → 해당 함수 호출 시점의 스텝으로 이동한다
 
 ## 엣지 케이스
 - [ ] **힙 63개 초과** — 힙에 63개 이상 노드가 있으면 → "+N 노드 생략" 메시지가 표시된다
