@@ -12,3 +12,11 @@ export {
   parseLinearContextVarNames,
 } from "./normalize";
 export { enrichAnalyzeMetadataWithPartitionValuePivots } from "./partitionPivotEnrichment";
+export {
+  applyDequeHints,
+  applyJsArrayHints,
+  applyDirectionMapGuards,
+  applyGraphModeInference,
+  enrichSpecialVarKinds,
+  enrichLinearPivots,
+} from "./enrichment";

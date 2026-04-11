@@ -200,11 +200,13 @@ it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다');
 
 #### 4B. Analyze 분해
 
-- [ ] `src/lib/analyzeEnrichment.ts` — `applyDequeHints()`(L435), `applyJsArrayHints()`(L483), `applyDirectionMapGuards()`(L547), `applyGraphModeInference()`(L581), `enrichSpecialVarKinds()`(L607), `enrichLinearPivots()`(L713) + 헬퍼 추출
-- [x] `src/lib/analyzeNormalize.ts` — `normalizeResponse`, `parseLinearPivots`, `parseLinearContextVarNames`, `fallbackAnalyzeMetadata` + 내부 `uniq` 추출 (`compactCodeForAnalyze`/`compactVarTypes`는 이미 analyzePrompt.ts에 포함)
-- [x] `src/lib/analyzePrompt.ts` — `ANALYZE_CODE_CHAR_LIMIT`, `ANALYZE_VAR_TYPES_LIMIT`, `compactCodeForAnalyze`, `compactVarTypes`, `ANALYZE_GEMINI_SCHEMA` 추출 (프롬프트 문자열 조합은 analyzeWithAi 내부에 유지)
-- [ ] `analyze/route.ts` POST 핸들러만 남기기 (목표: ~200줄)
-- [ ] `npm run build` 통과 확인
+- [x] `app/api/analyze/_lib/enrichment.ts` — 6개 보강 함수 + 3개 detect 헬퍼 + `uniq` 추출
+- [x] `app/api/analyze/_lib/normalize.ts` — `normalizeResponse`, `parseLinearPivots`, `parseLinearContextVarNames`, `fallbackAnalyzeMetadata` 추출
+- [x] `app/api/analyze/_lib/prompt.ts` — 상수 + `compactCodeForAnalyze`, `compactVarTypes`, `ANALYZE_GEMINI_SCHEMA` 추출
+- [x] `app/api/analyze/_lib/partitionPivotEnrichment.ts` — `src/lib/`에서 이동
+- [x] `src/lib/graphModeInference.ts` — 클라이언트+서버 공유이므로 `src/lib/`에 유지
+- [x] `analyze/route.ts` → 187줄 (analyzeWithAi + POST 핸들러만 남음, 목표 ~200줄 달성)
+- [x] `npm run build` 통과 확인
 
 ### Phase 5: QA
 
