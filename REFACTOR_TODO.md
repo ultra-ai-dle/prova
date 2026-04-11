@@ -201,7 +201,7 @@ it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다');
 #### 4B. Analyze 분해
 
 - [ ] `src/lib/analyzeEnrichment.ts` — `applyDequeHints()`(L435), `applyJsArrayHints()`(L483), `applyDirectionMapGuards()`(L547), `applyGraphModeInference()`(L581), `enrichSpecialVarKinds()`(L607), `enrichLinearPivots()`(L713) + 헬퍼 추출
-- [ ] `src/lib/analyzeNormalize.ts` — `normalizeResponse()`(L297), `parseLinearPivots()`(L256), `parseLinearContextVarNames()`(L283), `compactCodeForAnalyze()`(L135), `compactVarTypes()`(L143), `fallbackAnalyzeMetadata()`(L869) 추출
+- [x] `src/lib/analyzeNormalize.ts` — `normalizeResponse`, `parseLinearPivots`, `parseLinearContextVarNames`, `fallbackAnalyzeMetadata` + 내부 `uniq` 추출 (`compactCodeForAnalyze`/`compactVarTypes`는 이미 analyzePrompt.ts에 포함)
 - [x] `src/lib/analyzePrompt.ts` — `ANALYZE_CODE_CHAR_LIMIT`, `ANALYZE_VAR_TYPES_LIMIT`, `compactCodeForAnalyze`, `compactVarTypes`, `ANALYZE_GEMINI_SCHEMA` 추출 (프롬프트 문자열 조합은 analyzeWithAi 내부에 유지)
 - [ ] `analyze/route.ts` POST 핸들러만 남기기 (목표: ~200줄)
 - [ ] `npm run build` 통과 확인
