@@ -117,12 +117,12 @@ it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다')
 
 #### 2E. 값 포맷팅 (패널 공유)
 
-- [ ] `src/lib/formatValue.ts` 생성
-- [ ] `GraphPanel.tsx` → `toFiniteNumber()`(L187), `formatScalar()`(L362), `formatCompact()`(L376), `toJsonLike()`(L381), `toJsonCompact()`(L410), `toJsonPreferSingleLine()`(L429), `toNumeric()`(L434), `isPlainObject()`(L359) 추출
-- [ ] `ThreeDVolumePanel.tsx` → `toNumber()` 제거, `toFiniteNumber` 사용으로 교체
-- [ ] `GridLinearPanel.tsx` → `formatCellValue()` 제거, `formatScalar` 사용으로 교체
-- [ ] `page.tsx` → `maxNumericAbs()`(L669), `formatWithBitMode()`(L683) 추출
-- [ ] 유닛 테스트 작성 → `npm run test` 통과
+- [x] `src/lib/formatValue.ts` 생성 (`toFiniteNumber`, `toNumberWithFallback`, `isPlainObject`, `formatScalar`, `formatCellValue`, `formatCompact`, `toJsonLike`, `toJsonCompact`, `toJsonPreferSingleLine`, `maxNumericAbs`, `formatWithBitMode`)
+- [x] `GraphPanel.tsx` → 8개 함수 추출 + `toNumeric`을 `toFiniteNumber`로 통일
+- [x] `ThreeDVolumePanel.tsx` → `toNumber()` 제거, `toNumberWithFallback` import 교체
+- [x] `GridLinearPanel.tsx` → `formatCellValue()` 제거, `formatValue.ts` import 교체 (동작 차이로 `formatScalar` 교체 불가, 별도 추출)
+- [x] `page.tsx` → `maxNumericAbs()`, `formatWithBitMode()` 추출
+- [x] 유닛 테스트 작성 → 52개 통과
 
 #### 2F. 데이터 감지 (패널 공유)
 

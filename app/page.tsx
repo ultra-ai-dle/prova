@@ -21,6 +21,7 @@ import {
   sanitizeVarTypes,
   sanitizeVarTypesWithAllowlist,
 } from "@/lib/traceSanitize";
+import { maxNumericAbs, formatWithBitMode } from "@/lib/formatValue";
 
 /* ── Helpers ─────────────────────────────────────────────── */
 function runButtonLabel(
@@ -94,38 +95,6 @@ async function fetchErrorExplanation(
   return chunks;
 }
 
-function maxNumericAbs(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value))
-    return Math.abs(value);
-  if (Array.isArray(value))
-    return value.reduce((m, v) => Math.max(m, maxNumericAbs(v)), 0);
-  if (value && typeof value === "object") {
-    return Object.values(value as Record<string, unknown>).reduce<number>(
-      (m, v) => Math.max(m, maxNumericAbs(v)),
-      0,
-    );
-  }
-  return 0;
-}
-
-function formatWithBitMode(
-  value: unknown,
-  bitmaskMode: boolean,
-  bitWidth: number,
-): string {
-  if (
-    !(
-      bitmaskMode &&
-      typeof value === "number" &&
-      Number.isInteger(value) &&
-      value >= 0
-    )
-  ) {
-    return JSON.stringify(value);
-  }
-  const bin = value.toString(2).padStart(Math.max(1, bitWidth), "0");
-  return `${value} (${bin})`;
-}
 
 export default function Page() {
   const [code, setCode] = useState("");

@@ -9,6 +9,15 @@ import {
   pointersAtIndexFromSpecs,
   type LinearPointerMap
 } from "@/features/visualization/linearPointerHelpers";
+import {
+  toFiniteNumber,
+  isPlainObject,
+  formatScalar,
+  formatCompact,
+  toJsonLike,
+  toJsonCompact,
+  toJsonPreferSingleLine,
+} from "@/lib/formatValue";
 
 type SpecialKind = "HEAP" | "QUEUE" | "STACK" | "DEQUE" | "UNIONFIND" | "VISITED" | "DISTANCE" | "PARENT_TREE";
 
@@ -184,15 +193,6 @@ function GraphLegendOverlay({
   );
 }
 
-function toFiniteNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-}
-
 function toNodeId(value: unknown): string | null {
   const n = toFiniteNumber(value);
   if (n !== null) return String(Math.trunc(n));
@@ -356,94 +356,11 @@ function to2D(value: unknown): unknown[][] {
   if (!Array.isArray(value)) return [];
   return value.map((row) => (Array.isArray(row) ? row : [row]));
 }
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
-function formatScalar(value: unknown, bitmaskMode = false, bitWidth = 1) {
-  if (value == null) return "null";
-  if (value === "True" || value === "true") return "T";
-  if (value === "False" || value === "false") return "F";
-  if (typeof value === "string") return value.length > 26 ? `${value.slice(0, 26)}…` : value;
-  if (typeof value === "number") {
-    if (bitmaskMode && Number.isInteger(value) && value >= 0) {
-      return value.toString(2).padStart(Math.max(1, bitWidth), "0");
-    }
-    return String(value);
-  }
-  if (typeof value === "boolean") return value ? "T" : "F";
-  return String(value);
-}
-function formatCompact(value: unknown, bitmaskMode = false, bitWidth = 1) {
-  if (Array.isArray(value)) return `[${value.length}]`;
-  if (isPlainObject(value)) return `{${Object.keys(value).length}}`;
-  return formatScalar(value, bitmaskMode, bitWidth);
-}
-function toJsonLike(value: unknown, depth = 0, bitmaskMode = false, bitWidth = 1): string {
-  const indent = "  ".repeat(depth);
-  const nextIndent = "  ".repeat(depth + 1);
-  if (value == null) return "null";
-  if (typeof value === "number") {
-    if (bitmaskMode && Number.isInteger(value) && value >= 0) {
-      return value.toString(2).padStart(Math.max(1, bitWidth), "0");
-    }
-    return String(value);
-  }
-  if (typeof value === "boolean") return value ? "T" : "F";
-  if (typeof value === "string") return JSON.stringify(value);
-  if (Array.isArray(value)) {
-    if (value.length === 0) return "[]";
-    const items = value.slice(0, 16).map((v) => `${nextIndent}${toJsonLike(v, depth + 1, bitmaskMode, bitWidth)}`);
-    const tail = value.length > 16 ? `${nextIndent}"...(+${value.length - 16})"` : "";
-    return `[\n${[...items, ...(tail ? [tail] : [])].join(",\n")}\n${indent}]`;
-  }
-  if (isPlainObject(value)) {
-    const entries = Object.entries(value);
-    if (entries.length === 0) return "{}";
-    const rows = entries.slice(0, 24).map(
-      ([k, v]) => `${nextIndent}${JSON.stringify(k)}: ${toJsonLike(v, depth + 1, bitmaskMode, bitWidth)}`
-    );
-    if (entries.length > 24) rows.push(`${nextIndent}"...": "+${entries.length - 24} keys"`);
-    return `{\n${rows.join(",\n")}\n${indent}}`;
-  }
-  return JSON.stringify(String(value));
-}
-function toJsonCompact(value: unknown, bitmaskMode = false, bitWidth = 1): string {
-  if (value == null) return "null";
-  if (typeof value === "number") {
-    if (bitmaskMode && Number.isInteger(value) && value >= 0) {
-      return value.toString(2).padStart(Math.max(1, bitWidth), "0");
-    }
-    return String(value);
-  }
-  if (typeof value === "boolean") return value ? "T" : "F";
-  if (typeof value === "string") return JSON.stringify(value);
-  if (Array.isArray(value)) {
-    return `[${value.map((v) => toJsonCompact(v, bitmaskMode, bitWidth)).join(", ")}]`;
-  }
-  if (isPlainObject(value)) {
-    const entries = Object.entries(value).sort(([a], [b]) => a.localeCompare(b));
-    return `{ ${entries.map(([k, v]) => `${JSON.stringify(k)}: ${toJsonCompact(v, bitmaskMode, bitWidth)}`).join(", ")} }`;
-  }
-  return JSON.stringify(String(value));
-}
-function toJsonPreferSingleLine(value: unknown, maxLen = 120, bitmaskMode = false, bitWidth = 1): string {
-  const oneLine = toJsonCompact(value, bitmaskMode, bitWidth);
-  if (oneLine.length <= maxLen) return oneLine;
-  return toJsonLike(value, 0, bitmaskMode, bitWidth);
-}
-function toNumeric(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-}
 function getPositiveMaxInGrid(grid: unknown[][]): number {
   let maxVal = 1;
   grid.forEach((row) => {
     row.forEach((cell) => {
-      const n = toNumeric(cell);
+      const n = toFiniteNumber(cell);
       if (n !== null && n > 0) maxVal = Math.max(maxVal, n);
     });
   });
@@ -451,7 +368,7 @@ function getPositiveMaxInGrid(grid: unknown[][]): number {
 }
 function getGridCellTone(value: unknown, positiveMax: number) {
   const isFalsy = value == null || value === "" || value === false || value === 0;
-  const n = toNumeric(value);
+  const n = toFiniteNumber(value);
   if (n !== null && n < 0) {
     return "border-[#7f3b3b] bg-[#3a1919] text-[#ffb4b4]";
   }

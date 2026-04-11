@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { MergedTraceStep } from "@/types/prova";
 import { ExpandIcon, CollapseIcon, ResetViewIcon, ClearActiveIcon } from "@/components/icons";
+import { toNumberWithFallback } from "@/lib/formatValue";
 
 type Props = {
   name: string;
@@ -33,16 +34,6 @@ const cameraStateByName = new Map<string, {
   position: [number, number, number];
   target: [number, number, number];
 }>();
-
-function toNumber(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "boolean") return value ? 1 : 0;
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-}
 
 function createTextSprite(text: string, color = "#e6edf3") {
   const canvas = document.createElement("canvas");
@@ -346,8 +337,8 @@ export function ThreeDVolumePanel({
       for (let r = 0; r < rows; r += 1) {
         for (let c = 0; c < cols; c += 1) {
           const raw = volume[r]?.[c]?.[k];
-          const value = toNumber(raw);
-          const prev = toNumber(prevVolume?.[r]?.[c]?.[k]);
+          const value = toNumberWithFallback(raw);
+          const prev = toNumberWithFallback(prevVolume?.[r]?.[c]?.[k]);
           const changed = !!prevVolume && value !== prev;
           const isActive = activeCells.has(cellKey(r, c, k));
           if (value === 0 && !changed && !isActive) continue;

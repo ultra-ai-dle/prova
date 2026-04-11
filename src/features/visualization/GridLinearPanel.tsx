@@ -8,6 +8,7 @@ import {
   pointersAtIndexFromSpecs,
   type LinearPointerMap
 } from "@/features/visualization/linearPointerHelpers";
+import { formatCellValue } from "@/lib/formatValue";
 
 type Props = {
   step: MergedTraceStep | null;
@@ -143,21 +144,6 @@ function toCells(step: MergedTraceStep, grid: unknown[][], previousGrid?: unknow
       return { value, isCurrent, changed };
     }),
   );
-}
-
-function formatCellValue(value: unknown, bitmaskMode = false, bitWidth = 1) {
-  if (value == null) return "";
-  if (typeof value === "number") {
-    if (bitmaskMode && Number.isInteger(value) && value >= 0) {
-      return `${value.toString(2).padStart(Math.max(1, bitWidth), "0")}`;
-    }
-    return String(value);
-  }
-  if (typeof value === "boolean") return value ? "T" : "F";
-  if (typeof value === "string") return value.length > 8 ? `${value.slice(0, 8)}…` : value;
-  if (Array.isArray(value)) return `[${value.length}]`;
-  if (typeof value === "object") return "{...}";
-  return String(value);
 }
 
 export function GridLinearPanel({
