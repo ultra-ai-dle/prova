@@ -247,9 +247,9 @@ const ANALYZE_GEMINI_SCHEMA: object = {
     "algorithm",
     "display_name",
     "strategy",
-    "tags",
     "key_vars",
     "var_mapping_list",
+    "tags",
   ],
 };
 
@@ -826,7 +826,7 @@ async function analyzeWithAi(
     "해당 없으면 {}.",
     "",
     "출력 JSON 스키마:",
-    '{"algorithm":"string","display_name":"string","strategy":"GRID|LINEAR|GRID_LINEAR|GRAPH","tags":["string"],"detected_data_structures":["string"],"detected_algorithms":["string"],"summary":"string","graph_mode":"directed|undirected","graph_var_name":"string","graph_representation":"GRID|MAP","uses_bitmasking":"boolean","time_complexity":"string","key_vars":["string"],"var_mapping":{"ROLE":{"var_name":"string","panel":"GRID|LINEAR|GRAPH|VARIABLES"}},"linear_pivots":[{"var_name":"string","badge":"string","indexes_1d_var":"string","pivot_mode":"index|value_in_array"}],"linear_context_var_names":["string"],"special_var_kinds":{"var_name":"HEAP|QUEUE|STACK|DEQUE|UNIONFIND|VISITED|DISTANCE|PARENT_TREE"}}',
+    '{"algorithm":"string","display_name":"string","strategy":"GRID|LINEAR|GRID_LINEAR|GRAPH","key_vars":["string"],"var_mapping_list":[{"role":"string","var_name":"string","panel":"GRID|LINEAR|GRAPH|VARIABLES"}],"tags":["string"],"detected_data_structures":["string"],"detected_algorithms":["string"],"graph_mode":"directed|undirected","graph_var_name":"string","graph_representation":"GRID|MAP","uses_bitmasking":"boolean","time_complexity":"string","linear_pivots":[{"var_name":"string","badge":"string","indexes_1d_var":"string","pivot_mode":"index|value_in_array"}],"linear_context_var_names":["string"],"special_var_kinds":{"var_name":"HEAP|QUEUE|STACK|DEQUE|UNIONFIND|VISITED|DISTANCE|PARENT_TREE"},"summary":"string"}',
     "",
     `[code]\n${compactCode}`,
     "",
@@ -835,7 +835,7 @@ async function analyzeWithAi(
 
   const geminiOpts: GeminiOptions = {
     responseSchema: ANALYZE_GEMINI_SCHEMA,
-    maxOutputTokens: 2048,
+    maxOutputTokens: 8192,
   };
 
   const parseAndPostProcess = (raw: string) => {

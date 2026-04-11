@@ -2353,26 +2353,6 @@ export default function Page() {
                       ))
                     )}
                   </div>
-                  {isError && currentStep?.aiError && (
-                    <div className="rounded-md border border-prova-red/30 bg-[#1a0a0d] px-3 py-2 flex flex-col gap-1 font-sans">
-                      <p className="text-[11px] text-prova-red/70 uppercase tracking-widest font-medium">
-                        AI 진단
-                      </p>
-                      <p className="text-[12px] text-[#ffc1c1] leading-relaxed">
-                        {currentStep.aiError.root_cause}
-                      </p>
-                      {currentStep.aiError.fix_hint && (
-                        <>
-                          <p className="text-[11px] text-prova-red/70 uppercase tracking-widest font-medium mt-1">
-                            수정 제안
-                          </p>
-                          <p className="text-[12px] text-[#ffddaa] leading-relaxed">
-                            {currentStep.aiError.fix_hint}
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
