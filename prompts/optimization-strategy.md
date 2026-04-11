@@ -42,7 +42,9 @@
 ```typescript
 // app/page.tsx:400-401
 const analyzeCacheRef = useRef<Map<string, AnalyzeMetadata>>(new Map());
-const analyzeInFlightRef = useRef<Map<string, Promise<AnalyzeMetadata>>>(new Map());
+const analyzeInFlightRef = useRef<Map<string, Promise<AnalyzeMetadata>>>(
+  new Map(),
+);
 ```
 
 `useRef`(in-memory Map)로 구현되어 있어 **페이지 새로고침 시 캐시가 완전히 소멸**된다. 동일한 코드를 다시 실행하면 AI API를 다시 호출한다.
@@ -69,7 +71,7 @@ const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7일
 interface CacheEntry {
   metadata: AnalyzeMetadata;
   timestamp: number;
-  lruOrder: number;   // 접근 시마다 갱신되는 단조 증가 카운터
+  lruOrder: number; // 접근 시마다 갱신되는 단조 증가 카운터
 }
 
 // 단조 카운터 (세션 내 순서 추적용)
@@ -79,7 +81,7 @@ let lruCounter = Date.now();
 async function hashKey(raw: string): Promise<string> {
   const buf = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(raw)
+    new TextEncoder().encode(raw),
   );
   return Array.from(new Uint8Array(buf))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -118,7 +120,7 @@ function evictIfNeeded(): void {
 }
 
 export async function getFromCache(
-  rawKey: string
+  rawKey: string,
 ): Promise<AnalyzeMetadata | null> {
   try {
     const hash = await hashKey(rawKey);
@@ -145,7 +147,7 @@ export async function getFromCache(
 
 export async function saveToCache(
   rawKey: string,
-  metadata: AnalyzeMetadata
+  metadata: AnalyzeMetadata,
 ): Promise<void> {
   try {
     evictIfNeeded();
@@ -165,9 +167,15 @@ export async function saveToCache(
         const hash = await hashKey(rawKey);
         localStorage.setItem(
           storageKey(hash),
-          JSON.stringify({ metadata, timestamp: Date.now(), lruOrder: ++lruCounter })
+          JSON.stringify({
+            metadata,
+            timestamp: Date.now(),
+            lruOrder: ++lruCounter,
+          }),
         );
-      } catch { /* 재시도도 실패 시 무시 */ }
+      } catch {
+        /* 재시도도 실패 시 무시 */
+      }
     }
   }
 }
@@ -186,9 +194,9 @@ function clearHalfCache(): void {
     }
   }
   allKeys.sort((a, b) => a.lruOrder - b.lruOrder);
-  allKeys.slice(0, Math.ceil(allKeys.length / 2)).forEach(({ key }) =>
-    localStorage.removeItem(key)
-  );
+  allKeys
+    .slice(0, Math.ceil(allKeys.length / 2))
+    .forEach(({ key }) => localStorage.removeItem(key));
 }
 ```
 
@@ -202,46 +210,41 @@ const cachedMeta = analyzeCacheRef.current.get(analyzeKey);
 
 // 변경 후
 const cachedMeta =
-  analyzeCacheRef.current.get(analyzeKey) ??   // 1. 메모리 캐시 (빠름)
-  (await getFromCache(analyzeKey));             // 2. localStorage 캐시 (영속)
+  analyzeCacheRef.current.get(analyzeKey) ?? // 1. 메모리 캐시 (빠름)
+  (await getFromCache(analyzeKey)); // 2. localStorage 캐시 (영속)
 
 // 저장 시 (기존 analyzeCacheRef.current.set 호출 이후에 추가)
 analyzeCacheRef.current.set(analyzeKey, meta);
-await saveToCache(analyzeKey, meta);           // 비동기, 결과 무시해도 됨
+await saveToCache(analyzeKey, meta); // 비동기, 결과 무시해도 됨
 ```
 
 ### 예상 기대 효과
 
-| 시나리오 | 변경 전 | 변경 후 |
-|---------|---------|---------|
-| 새로고침 후 동일 코드 재실행 | API 호출 | **0 토큰** |
-| 코드 수정 후 원복 | API 호출 | **0 토큰** |
+| 시나리오                              | 변경 전  | 변경 후    |
+| ------------------------------------- | -------- | ---------- |
+| 새로고침 후 동일 코드 재실행          | API 호출 | **0 토큰** |
+| 코드 수정 후 원복                     | API 호출 | **0 토큰** |
 | 다음 날 같은 알고리즘 실행 (7일 이내) | API 호출 | **0 토큰** |
 
 ---
 
-## 2. varTypes 시그니처 정규화 — 캐시 히트율 개선
+## 2. varTypes 시그니처 정규화 — ~~캐시 히트율 개선~~ (미채택)
 
-### 현재 구현 상태
+### 초기 가설과 실제 동작의 차이
 
-```typescript
-// app/page.tsx:366-370
-function stableStringifyObject(obj: Record<string, string>) {
-  return JSON.stringify(
-    Object.fromEntries(Object.entries(obj).sort(([a], [b]) => a.localeCompare(b)))
-  );
-}
+`varTypes`는 `extractVarTypesUnion`이 전체 트레이스를 순회하며 **등장한 모든 변수의 첫 번째 타입**을 기록한 맵이다. 함수 매개변수, 지역 변수, 루프 카운터 모두 포함되며, 실제 입력값(value)이 아닌 타입만 저장된다.
 
-// 캐시 키: language + code + 전체 varTypes JSON
-const analyzeKey =
-  `${analyzeLanguage}\n@@\n${codeRef.current}\n@@\n${stableStringifyObject(sanitizedVarTypes)}\n@@\nmeta-v2-partition-pivot`;
+```
+bfs(graph, 5) 실행 → varTypes = { "graph": "dict", "start": "int", "visited": "set", ... }
 ```
 
-`varTypes`는 변수명과 타입의 매핑이다 (예: `{ "graph": "dict", "visited": "set", "i": "int" }`). **변수명이 포함되기 때문에, 사용자가 변수명만 바꿔도 캐시 미스가 발생한다.**
+초기 제안은 "변수명을 바꿔도 타입 분포가 같으면 캐시 히트"를 목표로 했으나, 소스 코드를 분석하는 과정에서 전제 자체가 틀렸음이 드러났다.
 
-### Pain Point
+### 왜 구현하지 않는가
 
-동일 알고리즘의 의미상 동일한 두 코드:
+**핵심 문제: 변수명을 바꾸면 코드 텍스트도 바뀐다.**
+
+캐시 키는 `language + code + varTypes` 조합이다. 문서에서 예시로 든 두 버전을 실제로 대입하면:
 
 ```python
 # 버전 A
@@ -251,32 +254,28 @@ def bfs(graph, start): visited = set(); queue = [start] ...
 def bfs(adj, src): seen = set(); q = [src] ...
 ```
 
-두 버전은 `varTypes` 값의 타입 집합은 동일하지만(`dict, set, list, int`) 키(변수명)가 달라 캐시 미스. `/api/analyze`가 두 번 호출된다.
+두 버전은 코드 텍스트 자체가 다르다. 따라서 `varTypes`를 정규화하기 전에 이미 **코드 컴포넌트에서 캐시 미스**가 발생한다. varTypes 정규화가 개입할 여지가 없는 것이다.
 
-### 기술 설계
+**정규화가 실제로 효과를 보는 경우는 매우 좁다:**
 
-`varTypes`의 **타입 값만 추출해 정렬한 시그니처**를 캐시 키로 사용한다. 단, 타입 분포가 같은 전혀 다른 알고리즘이 충돌하는 경우를 방지하기 위해 **코드 자체는 키에 그대로 유지**한다.
+같은 코드를 서로 다른 `stdin` 입력값으로 실행했을 때, 분기 경로가 달라 일부 변수가 scope에 들어오거나 빠지는 경우뿐이다.
 
-```typescript
-/**
- * varTypes에서 변수명을 제거하고 타입 집합만 추출.
- * { "graph": "dict", "visited": "set", "i": "int" }
- *   → "dict,int,set"  (정렬 후 join)
- */
-function varTypeSignature(varTypes: Record<string, string>): string {
-  return Object.values(varTypes).sort().join(",");
-}
-
-const analyzeKey =
-  `${analyzeLanguage}\n@@\n${codeRef.current}\n@@\n${varTypeSignature(sanitizedVarTypes)}\n@@\nmeta-v2-partition-pivot`;
+```python
+if n > 10:
+    x = [...]   # n=5이면 varTypes에 x 없음, n=15이면 있음
 ```
 
-> **주의**: AI 응답에서 `var_mapping`(변수명 → 패널 매핑)은 코드 분석으로 도출되므로 변수명 정보가 AI에게 전달되지 않는 것과 무관하다. 캐시 키만 정규화하는 것이며, `/api/analyze` 호출 시 전달하는 `varTypes`는 기존 그대로 유지한다.
+이 경우 코드는 동일하지만 varTypes가 달라 캐시 미스가 발생하고, 정규화하면 히트할 수 있다. 그러나 이 시나리오에서는 실행 경로가 실제로 다르기 때문에 **AI가 내놓는 분석 결과도 달라야 정상**이다. 즉, 정규화로 인한 캐시 히트가 오히려 **잘못된 메타데이터를 반환하는 false hit**이 될 수 있다.
 
-### 예상 기대 효과
+### 결론
 
-- 변수명을 리팩터링한 코드 재실행 시 캐시 히트율 향상
-- 동일 알고리즘 패턴의 반복 학습 케이스에서 불필요한 API 호출 감소
+| 항목                                    | 평가                                                 |
+| --------------------------------------- | ---------------------------------------------------- |
+| 예상했던 주 효과 (변수명 리팩터링 대응) | 코드 텍스트 변경으로 이미 캐시 미스 → **효과 없음**  |
+| 실제 효과가 있는 케이스 (분기 차이)     | AI 분석 결과가 달라야 하는 상황 → **false hit 위험** |
+| 구현 복잡도 대비 순이익                 | **음수**                                             |
+
+varTypes 정규화는 미채택한다. 현재 캐시 키 구조(`language + code + varTypes 전체`)가 의미상 올바르다.
 
 ---
 
@@ -334,8 +333,12 @@ if (errorStepIndex >= 0) {
   // 비동기, UI를 블로킹하지 않음
   fetchErrorExplanation(errorContext, meta).then((annotated) => {
     // 에러 스텝에만 주석 반영
-    const sparse = new Array<AnnotatedStep | null>(sanitizedRawTrace.length).fill(null);
-    annotated.forEach((a, i) => { sparse[contextStart + i] = a; });
+    const sparse = new Array<AnnotatedStep | null>(
+      sanitizedRawTrace.length,
+    ).fill(null);
+    annotated.forEach((a, i) => {
+      sparse[contextStart + i] = a;
+    });
     setAnnotated(sparse.filter(Boolean) as AnnotatedStep[]);
   });
 }
@@ -345,7 +348,7 @@ if (errorStepIndex >= 0) {
 // 에러 설명 전용 경량 호출
 async function fetchErrorExplanation(
   steps: RawTraceStep[],
-  meta: AnalyzeMetadata
+  meta: AnalyzeMetadata,
 ): Promise<AnnotatedStep[]> {
   const res = await fetch("/api/explain", {
     method: "POST",
@@ -380,157 +383,20 @@ async function fetchErrorExplanation(
 
 #### 효용성
 
-| 항목 | 전체 explain | 에러 스텝 우선 |
-|------|-------------|---------------|
-| 전송 스텝 수 | 전체 (최대 10,000) | **최대 7개** |
-| 토큰 소모 | 매우 높음 | **극소** |
-| UX 가치 | 보통 (시각화가 이미 설명) | **높음** (에러 원인·해결책이 필요한 순간) |
-| 구현 위험도 | 높음 | **낮음** (기존 인프라 재사용) |
+| 항목         | 전체 explain              | 에러 스텝 우선                            |
+| ------------ | ------------------------- | ----------------------------------------- |
+| 전송 스텝 수 | 전체 (최대 10,000)        | **최대 7개**                              |
+| 토큰 소모    | 매우 높음                 | **극소**                                  |
+| UX 가치      | 보통 (시각화가 이미 설명) | **높음** (에러 원인·해결책이 필요한 순간) |
+| 구현 위험도  | 높음                      | **낮음** (기존 인프라 재사용)             |
 
 ---
 
-### 3-2. 중요 스텝 선별 전송
+### 3-2. 중요 스텝 선별 전송 — (미채택, 시기상조)
 
-전체 explain을 활성화하는 경우, 모든 스텝을 AI에 보내는 것은 비효율적이다. 알고리즘 실행의 대부분은 루프 카운터 증가, 내부 변수 초기화 등 **알고리즘 이해에 무의미한 스텝**이다.
+에러 스텝 우선 전략(3-1)은 이미 최대 7 스텝만 전송하므로 필터링이 필요 없다. 중요 스텝 선별은 "전체 트레이스를 explain에 보내는 경우"를 전제로 하는데, 전체 explain 활성화 자체가 아직 결정되지 않은 상태다.
 
-#### 중요 스텝 판별 알고리즘
-
-다음 우선순위로 스텝을 분류한다:
-
-```typescript
-// src/lib/significantSteps.ts (신규)
-
-import { RawTraceStep, BranchLines, AnalyzeMetadata } from "@/types/prova";
-
-export interface SignificantStep {
-  step: RawTraceStep;
-  originalIndex: number;
-  reason: "error" | "key_var_changed" | "structure_mutated" | "branch_boundary" | "first_last";
-}
-
-/**
- * 전체 트레이스에서 AI 설명이 의미있는 스텝만 선별한다.
- *
- * 판별 기준 (우선순위 순):
- *  1. runtimeError — 에러 스텝은 항상 포함
- *  2. key_vars 변화 — AI가 핵심으로 판단한 변수의 값 변화
- *  3. 자료구조 변이 — 컬렉션(list/set/dict)의 length 변화
- *  4. 분기/루프 경계 — branchLines 교차 시점
- *  5. 첫/마지막 스텝 — 진입·종료 컨텍스트
- */
-export function selectSignificantSteps(
-  trace: RawTraceStep[],
-  branchLines: BranchLines,
-  metadata: AnalyzeMetadata,
-  maxSteps = 80   // AI에게 보낼 최대 스텝 수
-): SignificantStep[] {
-  if (trace.length === 0) return [];
-
-  const branchSet = new Set([...branchLines.loop, ...branchLines.branch]);
-  const keyVars = new Set(metadata.key_vars ?? []);
-
-  const scored: Array<{ step: RawTraceStep; idx: number; score: number; reason: SignificantStep["reason"] }> = [];
-
-  for (let i = 0; i < trace.length; i++) {
-    const curr = trace[i];
-    const prev = i > 0 ? trace[i - 1] : null;
-
-    // 1. 에러 스텝 (최고 우선순위)
-    if (curr.runtimeError) {
-      scored.push({ step: curr, idx: i, score: 100, reason: "error" });
-      continue;
-    }
-
-    // 2. 핵심 변수 값 변화
-    if (prev && keyVars.size > 0) {
-      const keyVarChanged = [...keyVars].some(
-        (v) => JSON.stringify(curr.vars[v]) !== JSON.stringify(prev.vars[v])
-      );
-      if (keyVarChanged) {
-        scored.push({ step: curr, idx: i, score: 70, reason: "key_var_changed" });
-        continue;
-      }
-    }
-
-    // 3. 컬렉션 크기(구조) 변이 감지
-    if (prev) {
-      const mutated = Object.keys(curr.vars).some((k) => {
-        const cv = curr.vars[k];
-        const pv = prev.vars[k];
-        if (Array.isArray(cv) && Array.isArray(pv)) return cv.length !== pv.length;
-        if (cv && typeof cv === "object" && "length" in cv) return (cv as {length: number}).length !== (pv as {length: number})?.length;
-        return false;
-      });
-      if (mutated) {
-        scored.push({ step: curr, idx: i, score: 50, reason: "structure_mutated" });
-        continue;
-      }
-    }
-
-    // 4. 분기/루프 경계
-    if (branchSet.has(curr.line)) {
-      scored.push({ step: curr, idx: i, score: 30, reason: "branch_boundary" });
-      continue;
-    }
-  }
-
-  // 5. 첫/마지막 스텝 항상 포함
-  const firstIdx = 0;
-  const lastIdx = trace.length - 1;
-  if (!scored.find((s) => s.idx === firstIdx))
-    scored.unshift({ step: trace[0], idx: 0, score: 20, reason: "first_last" });
-  if (!scored.find((s) => s.idx === lastIdx))
-    scored.push({ step: trace[lastIdx], idx: lastIdx, score: 20, reason: "first_last" });
-
-  // 점수 내림차순 정렬 후 maxSteps 제한, 결과는 원본 순서로 재정렬
-  const top = scored
-    .sort((a, b) => b.score - a.score || a.idx - b.idx)
-    .slice(0, maxSteps)
-    .sort((a, b) => a.idx - b.idx);
-
-  return top.map(({ step, idx, reason }) => ({
-    step,
-    originalIndex: idx,
-    reason,
-  }));
-}
-```
-
-#### explain 호출 시 연동
-
-```typescript
-// /api/explain 호출 전 필터링
-const significant = selectSignificantSteps(
-  sanitizedRawTrace,
-  branchLines,
-  meta,
-  80  // 토큰 예산에 따라 조정
-);
-
-// 선별된 스텝만 전송
-const res = await fetch("/api/explain", {
-  body: JSON.stringify({
-    rawTrace: significant.map((s) => s.step),
-    algorithm: meta.algorithm,
-    strategy: meta.strategy,
-  }),
-});
-
-// AI 응답을 원본 인덱스에 매핑
-const sparse = new Array<AnnotatedStep | null>(sanitizedRawTrace.length).fill(null);
-annotatedChunks.forEach((a, i) => {
-  sparse[significant[i].originalIndex] = a;
-});
-setAnnotated(sparse.filter(Boolean) as AnnotatedStep[]);
-```
-
-#### 필터링 효과 추정
-
-| 알고리즘 | 총 스텝 | 선별 후 예상 스텝 | 절감률 |
-|---------|---------|-----------------|-------|
-| BFS (그래프 100노드) | ~800 | ~60 | **92%** |
-| 버블 정렬 (n=50) | ~2,500 | ~70 | **97%** |
-| DP (피보나치 n=30) | ~120 | ~35 | **71%** |
+현재 시점에서 이 최적화를 설계하는 것은 존재하지 않는 문제를 푸는 것과 같다. 전체 explain 도입을 결정하는 시점에 함께 설계한다.
 
 ---
 
@@ -585,41 +451,9 @@ function extractExecutedLines(code: string, trace: RawTraceStep[]): string {
 
 ---
 
-## 5. 청크 크기 동적 조정 — /api/explain
+## 5. 청크 크기 동적 조정 — (미채택, 시기상조)
 
-### 현재 구현 상태
-
-```typescript
-// app/api/explain/route.ts:7
-const CHUNK_SIZE = 8;
-```
-
-트레이스 길이와 무관하게 고정 8 스텝씩 청크 처리.
-
-### 기술 설계
-
-트레이스 총 길이에 비례해 청크 크기를 조정, AI 호출 횟수를 줄인다:
-
-```typescript
-// app/api/explain/route.ts
-
-function adaptiveChunkSize(totalSteps: number): number {
-  if (totalSteps <= 20)  return 4;   // 짧은 트레이스: 세밀하게
-  if (totalSteps <= 100) return 8;   // 현재 기본값
-  if (totalSteps <= 500) return 16;  // 중간 규모
-  return 24;                         // 장대한 트레이스: 묶어서 처리
-}
-
-// Route handler 내부
-const CHUNK_SIZE = adaptiveChunkSize(steps.length);
-```
-
-### 예상 기대 효과
-
-| 트레이스 길이 | 기존 API 호출 수 | 개선 후 API 호출 수 | 절감률 |
-|-------------|----------------|------------------|-------|
-| 500 스텝 | 63회 | 32회 (16 청크) | **49%** |
-| 1,000 스텝 | 125회 | 42회 (24 청크) | **66%** |
+`/api/explain`의 고정 `CHUNK_SIZE = 8`을 트레이스 길이에 따라 동적으로 조정하는 아이디어였으나, 3-2와 같은 이유로 미채택한다. 에러 스텝 전략에서는 전송 스텝이 최대 7개이므로 청크 크기 자체가 의미 없고, 전체 explain 활성화를 결정하는 시점에 함께 검토한다.
 
 ---
 
@@ -627,13 +461,12 @@ const CHUNK_SIZE = adaptiveChunkSize(steps.length);
 
 ```
 Phase 1 (낮은 위험, 높은 즉시 효과)
-├── localStorage LRU 캐시                  → 재방문 시 AI 비용 제로
-├── varTypes 시그니처 정규화               → 캐시 히트율 향상
+├── localStorage LRU 캐시                  → 재방문 시 AI 비용 제로 ✅ 구현 완료
 └── /api/explain 에러 스텝 우선 활성화    → 최소 토큰으로 최대 UX 가치
 
-Phase 2 (중간 복잡도)
-├── 중요 스텝 선별 전송 (significantSteps) → 전체 explain 토큰 70~97% 절감
-└── 청크 크기 동적 조정                   → explain API 호출 횟수 50~66% 절감
+Phase 2 (전체 explain 활성화 결정 시 함께 검토)
+├── 중요 스텝 선별 전송                   → 전체 explain 토큰 절감 (현재 미채택)
+└── 청크 크기 동적 조정                   → explain API 호출 횟수 절감 (현재 미채택)
 
 Phase 3 (아키텍처 변경 수반)
 ├── Gemini systemInstruction 분리          → analyze 반복 호출 비용 절감
