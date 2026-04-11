@@ -212,3 +212,9 @@ it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다')
 - **Phase별 독립 검증** — 각 Phase 완료 후 반드시 `npm run build` 통과를 확인하고, Phase 3~4는 수동 QA를 병행해야 함.
 - **CLAUDE.md 규칙 준수** — 타입은 `src/types/prova.ts`에, Worker 통신은 `ProvaRuntime`을 통해서만, AI 호출은 `callWithFallback()`을 통해서만.
 - **GraphPanel SVG는 뷰 컴포넌트와 함께 이동** — Queue/Stack/Deque 뷰의 SVG 화살표는 독립 아이콘이 아니라 뷰 로직의 일부이므로, Phase 3A 특수뷰 분리 시 함께 이동함. `icons.tsx`에 넣지 않음.
+
+---
+
+## 발견된 버그 (리팩토링 중 발견, 별도 수정 필요)
+
+- [ ] **`detectLanguageFromCode` 주석 내 키워드 반영 버그** — 라인 구문 스코어링에서는 주석(`#`, `//`)을 제거하지만, 단어 키워드 매칭에서는 원본 텍스트(`compact`)를 사용하여 주석 내 키워드도 스코어에 반영됨. `compact` 대신 주석 제거된 텍스트를 사용해야 함. (`src/lib/languageDetection.ts`)

@@ -76,9 +76,8 @@ describe("detectLanguageFromCode", () => {
   });
 
   /* ── 주석과 구문 패턴 ── */
+  // TODO: 주석 내 키워드가 단어 매칭 스코어에 반영되는 버그 수정 후 아래 테스트 기대값 업데이트 필요
   it("detectLanguageFromCode는 주석 내 구문 패턴(def/class/const 등)을 라인 스코어에 반영하지 않는다", () => {
-    // # def foo(): 는 Python 라인 구문 +4를 받지 않는다 (주석이므로)
-    // 하지만 단어 키워드 매칭에는 여전히 반영됨 (현재 구현의 동작)
     const code = "const x = 1;\n# def foo():\nconst y = 2;";
     expect(detectLanguageFromCode(code)).toBe("javascript");
   });
