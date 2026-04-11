@@ -78,14 +78,14 @@ it('GridLinearPanel은 step이 null일 때 플레이스홀더를 보여준다')
 
 ### Phase 1: 인라인 SVG 분리 (1순위 — 영향 범위 최소)
 
-- [ ] `src/components/icons.tsx` 생성
-- [ ] `page.tsx` → `IconFiles`, `IconSettings`, `IconRefresh`, `IconExpand`, `IconWarning`, `IconPencil` (L16-108) 추출
-- [ ] `ThreeDVolumePanel.tsx` → `ExpandIcon`, `CollapseIcon`, `ResetViewIcon`, `ClearActiveIcon` (L155-186) 추출
-- [ ] `GridLinearPanel.tsx` → `GridIcon` (L163) 추출
-- [ ] `TimelineControls.tsx` → `IconTarget` (L20) 추출
-- [ ] 원본 파일에서 인라인 정의 제거 + import 교체
-- [ ] `npm run build` 통과 확인
-- [ ] 아이콘 스냅샷 테스트 작성
+- [x] `src/components/icons/` 디렉토리 생성 (AppIcons, PanelIcons, GridIcons, TimelineIcons, index.ts)
+- [x] `page.tsx` → `IconFiles`, `IconSettings`, `IconRefresh`, `IconExpand`, `IconWarning`, `IconPencil` 추출
+- [x] `ThreeDVolumePanel.tsx` → `ExpandIcon`(=IconExpand alias), `CollapseIcon`, `ResetViewIcon`, `ClearActiveIcon` 추출
+- [x] `GridLinearPanel.tsx` → `GridIcon` 추출 (className prop 기본값 적용)
+- [x] `TimelineControls.tsx` → `IconTarget` 추출
+- [x] 원본 파일에서 인라인 정의 제거 + import 교체
+- [x] `npm run build` 통과 확인
+- [x] 아이콘 스냅샷 테스트 작성 (34 tests, 11 snapshots)
 
 ### Phase 2: 타입 / 상수 / 유틸 분리 (2순위 — 순수 함수, 의존성 낮음)
 

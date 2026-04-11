@@ -1,6 +1,7 @@
 "use client";
 
 import { LinearPivotSpec, MergedTraceStep } from "@/types/prova";
+import { GridIcon } from "@/components/icons";
 import { ThreeDVolumePanel } from "@/features/visualization/ThreeDVolumePanel";
 import {
   formatLinearAlgoContext,
@@ -158,25 +159,6 @@ function formatCellValue(value: unknown, bitmaskMode = false, bitWidth = 1) {
   if (typeof value === "object") return "{...}";
   return String(value);
 }
-
-const GridIcon = () => (
-  <svg
-    width="40"
-    height="40"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className="text-[#30363d]"
-  >
-    <rect x="3" y="3" width="7" height="7" />
-    <rect x="14" y="3" width="7" height="7" />
-    <rect x="14" y="14" width="7" height="7" />
-    <rect x="3" y="14" width="7" height="7" />
-  </svg>
-);
 
 export function GridLinearPanel({
   step,
