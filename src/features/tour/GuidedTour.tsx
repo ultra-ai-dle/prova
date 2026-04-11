@@ -79,6 +79,56 @@ function Arrow({ side }: { side: TooltipPos["arrowSide"] }) {
 
 /* ── Main GuidedTour component ───────────────────────── */
 
+/* ── Completion modal ────────────────────────────────── */
+
+function CompletionModal() {
+  const { showCompletionModal, closeCompletionModal } = useTourStore();
+
+  useEffect(() => {
+    if (!showCompletionModal) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" || e.key === "Enter") closeCompletionModal();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showCompletionModal, closeCompletionModal]);
+
+  if (!showCompletionModal) return null;
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-[60] bg-black/60"
+        onClick={closeCompletionModal}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="투어 완료"
+        className="fixed z-[61] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] rounded-lg border border-[#30363d] bg-[#161b22] shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-in fade-in zoom-in-95 duration-200"
+      >
+        <div className="p-6 text-center">
+          <div className="mx-auto mb-3 w-10 h-10 rounded-full bg-[#238636]/20 flex items-center justify-center">
+            <span className="text-lg">✓</span>
+          </div>
+          <h3 className="text-[15px] font-bold text-white">준비 완료!</h3>
+          <p className="mt-2 text-[12px] text-[#8b949e] leading-relaxed whitespace-pre-line">
+            {"이제 코드를 작성하고 디버깅을 시작해 보세요.\n투어를 다시 보려면 우측 상단 ⚙ 버튼을 클릭하세요."}
+          </p>
+          <button
+            className="mt-4 h-8 px-5 rounded bg-[#238636] text-[13px] text-white font-medium hover:bg-[#2ea043] transition-colors"
+            onClick={closeCompletionModal}
+          >
+            시작하기
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ── Main GuidedTour component ───────────────────────── */
+
 export function GuidedTour() {
   const { isTourActive, currentStep, nextStep, prevStep, endTour, startTour, isCompleted } =
     useTourStore();
@@ -139,7 +189,8 @@ export function GuidedTour() {
     }
   }, [uiMode, isTourActive, endTour]);
 
-  if (!isTourActive || !targetRect) return null;
+  if (!isTourActive) return <CompletionModal />;
+  if (!targetRect) return null;
 
   const step = TOUR_STEPS[currentStep];
   const pos = calcTooltipPos(targetRect, step.placement, tooltipHeight);
@@ -184,7 +235,7 @@ export function GuidedTour() {
 
           {/* Content */}
           <h3 className="mt-2 text-[14px] font-bold text-white">{step.title}</h3>
-          <p className="mt-1 text-[12px] text-[#8b949e] leading-relaxed">{step.body}</p>
+          <p className="mt-1 text-[12px] text-[#8b949e] leading-relaxed whitespace-pre-line">{step.body}</p>
 
           {/* Buttons */}
           <div className="mt-4 flex items-center justify-between">
