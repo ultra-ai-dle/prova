@@ -1,0 +1,59 @@
+# dfs — Java
+
+`Main.java`
+
+```java
+import java.io.*;
+import java.util.*;
+
+public class Main {
+  static List<List<Integer>> g;
+  static boolean[] seen;
+  static StringBuilder sb = new StringBuilder();
+
+  static void dfs(int u) {
+    seen[u] = true;
+    if (sb.length() > 0) sb.append(' ');
+    sb.append(u);
+    for (int v : g.get(u)) {
+      if (!seen[v]) dfs(v);
+    }
+  }
+
+  public static void main(String[] args) throws Exception {
+    BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+    String[] nms = br.readLine().split("\\s+");
+    int n = Integer.parseInt(nms[0]);
+    int m = Integer.parseInt(nms[1]);
+    int st = Integer.parseInt(nms[2]);
+    g = new ArrayList<>();
+    for (int i = 0; i < n; i++) g.add(new ArrayList<>());
+    for (int k = 0; k < m; k++) {
+      String[] ab = br.readLine().split("\\s+");
+      int a = Integer.parseInt(ab[0]);
+      int b = Integer.parseInt(ab[1]);
+      g.get(a).add(b);
+      g.get(b).add(a);
+    }
+    for (int i = 0; i < n; i++) Collections.sort(g.get(i));
+    seen = new boolean[n];
+    dfs(st);
+    System.out.println(sb);
+  }
+}
+```
+
+입력
+
+```
+3 3 0
+0 1
+0 2
+1 2
+```
+
+출력
+
+```
+0 1 2
+```
