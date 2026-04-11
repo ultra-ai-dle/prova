@@ -333,6 +333,209 @@ function highlightPythonLine(
     /(#.*$|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b[A-Za-z_][A-Za-z0-9_]*\b|\b\d+(?:\.\d+)?\b)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null = pattern.exec(line);
+  while (match) {
+    if (match.index > lastIndex) {
+      tokens.push({
+        text: line.slice(lastIndex, match.index),
+        className: "text-[#c9d1d9]",
+      });
+    }
+    const token = match[0];
+    if (token.startsWith("//")) {
+      tokens.push({ text: token, className: "text-[#8b949e] italic" });
+    } else if (/^["`']/.test(token)) {
+      tokens.push({ text: token, className: "text-[#a5d6ff]" });
+    } else if (/^\d/.test(token)) {
+      tokens.push({ text: token, className: "text-[#79c0ff]" });
+    } else if (JS_KEYWORDS.has(token)) {
+      tokens.push({ text: token, className: "text-[#ff7b72]" });
+    } else {
+      tokens.push({ text: token, className: "text-[#d2a8ff]" });
+    }
+    lastIndex = match.index + token.length;
+    match = pattern.exec(line);
+  }
+  if (lastIndex < line.length) {
+    tokens.push({ text: line.slice(lastIndex), className: "text-[#c9d1d9]" });
+  }
+  if (tokens.length === 0) {
+    tokens.push({ text: " ", className: "text-[#c9d1d9]" });
+  }
+  return tokens;
+}
+
+const JS_KEYWORDS = new Set([
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "export",
+  "extends",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "let",
+  "new",
+  "of",
+  "return",
+  "static",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+  "true",
+  "false",
+  "null",
+  "undefined",
+  "async",
+  "await",
+]);
+
+const PYTHON_LANGUAGE_HINTS = [
+  "def",
+  "elif",
+  "except",
+  "nonlocal",
+  "lambda",
+  "None",
+  "True",
+  "False",
+  "yield",
+  "with",
+  "import",
+  "from",
+  "pass",
+  "raise",
+];
+
+const JAVASCRIPT_LANGUAGE_HINTS = [
+  "function",
+  "const",
+  "let",
+  "var",
+  "console",
+  "undefined",
+  "null",
+  "new",
+  "class",
+  "extends",
+  "this",
+  "return",
+  "async",
+  "await",
+];
+
+function detectLanguageFromCode(
+  code: string,
+  fallback: "python" | "javascript" = "python",
+): "python" | "javascript" {
+  const compact = code.trim();
+  if (!compact) return fallback;
+
+  let pyScore = 0;
+  let jsScore = 0;
+
+  const lines = compact.split("\n");
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const pyLine = line.replace(/#.*/, "");
+    const jsLine = line.replace(/\/\/.*/, "");
+
+    if (/^\s*(def|class)\s+[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(pyLine))
+      pyScore += 4;
+    if (
+      /:\s*$/.test(pyLine) &&
+      /^(if|elif|else|for|while|def|class|try|except|with)\b/.test(pyLine)
+    )
+      pyScore += 2;
+    if (/\bprint\s*\(/.test(pyLine)) pyScore += 1;
+
+    if (/\b(?:const|let|var)\s+[A-Za-z_$][A-Za-z0-9_$]*/.test(jsLine))
+      jsScore += 3;
+    if (/\bfunction\b|\=\>\s*/.test(jsLine)) jsScore += 3;
+    if (/\bconsole\.log\s*\(/.test(jsLine)) jsScore += 2;
+    if (/[{};]|===|!==/.test(jsLine)) jsScore += 1;
+  }
+
+  const wordPattern = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
+  const words = compact.match(wordPattern) ?? [];
+  for (const w of words) {
+    if (PY_KEYWORDS.has(w) || PYTHON_LANGUAGE_HINTS.includes(w)) pyScore += 1;
+    if (JS_KEYWORDS.has(w) || JAVASCRIPT_LANGUAGE_HINTS.includes(w))
+      jsScore += 1;
+  }
+
+  if (jsScore > pyScore + 1) return "javascript";
+  if (pyScore > jsScore + 1) return "python";
+  return fallback;
+}
+
+function highlightJsLine(
+  line: string,
+): Array<{ text: string; className: string }> {
+  const tokens: Array<{ text: string; className: string }> = [];
+  const pattern =
+    /(\/\/.*$|`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b[A-Za-z_$][A-Za-z0-9_$]*\b|\b\d+(?:\.\d+)?\b)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null = pattern.exec(line);
+  while (match) {
+    if (match.index > lastIndex) {
+      tokens.push({
+        text: line.slice(lastIndex, match.index),
+        className: "text-[#c9d1d9]",
+      });
+    }
+    const token = match[0];
+    if (token.startsWith("//")) {
+      tokens.push({ text: token, className: "text-[#8b949e] italic" });
+    } else if (/^["`']/.test(token)) {
+      tokens.push({ text: token, className: "text-[#a5d6ff]" });
+    } else if (/^\d/.test(token)) {
+      tokens.push({ text: token, className: "text-[#79c0ff]" });
+    } else if (JS_KEYWORDS.has(token)) {
+      tokens.push({ text: token, className: "text-[#ff7b72]" });
+    } else {
+      tokens.push({ text: token, className: "text-[#d2a8ff]" });
+    }
+    lastIndex = match.index + token.length;
+    match = pattern.exec(line);
+  }
+  if (lastIndex < line.length) {
+    tokens.push({ text: line.slice(lastIndex), className: "text-[#c9d1d9]" });
+  }
+  if (tokens.length === 0) {
+    tokens.push({ text: " ", className: "text-[#c9d1d9]" });
+  }
+  return tokens;
+}
+
+function highlightPythonLine(
+  line: string,
+): Array<{ text: string; className: string }> {
+  const tokens: Array<{ text: string; className: string }> = [];
+  const pattern =
+    /(#.*$|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b[A-Za-z_][A-Za-z0-9_]*\b|\b\d+(?:\.\d+)?\b)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null = pattern.exec(line);
 
   while (match) {
     if (match.index > lastIndex) {
@@ -618,10 +821,6 @@ function sanitizeVarTypesWithAllowlist(
   );
 }
 
-function isRenderableValue(value: unknown) {
-  return Array.isArray(value) || (!!value && typeof value === "object");
-}
-
 function stableStringifyObject(obj: Record<string, string>) {
   return JSON.stringify(
     Object.fromEntries(
@@ -776,14 +975,19 @@ export default function Page() {
   const shouldUseGraphPanel = useMemo(() => {
     if (isAnalyzingCode || !currentStep) return false;
     if (effectiveStrategy === "GRAPH") return true;
-    const source =
-      mergedTrace.length > 0
-        ? mergedTrace.filter((s) => s.step <= currentStep.step)
-        : [currentStep];
-    return source.some((s) =>
-      Object.values(s.vars ?? {}).some((v) => isRenderableValue(v)),
-    );
-  }, [currentStep, effectiveStrategy, isAnalyzingCode, mergedTrace]);
+    // AI가 특수 자료구조 뷰를 지정한 변수가 있으면 GraphPanel을 사용
+    if (
+      metadata?.special_var_kinds &&
+      Object.keys(metadata.special_var_kinds).length > 0
+    )
+      return true;
+    return false;
+  }, [
+    currentStep,
+    effectiveStrategy,
+    isAnalyzingCode,
+    metadata?.special_var_kinds,
+  ]);
   const shouldShowBitToggle = useMemo(() => {
     if (!metadata) return false;
     if (metadata.uses_bitmasking) return true;
@@ -1783,6 +1987,7 @@ export default function Page() {
                   bitWidth={bitWidth}
                   linearPivots={metadata?.linear_pivots}
                   linearContextVarNames={metadata?.linear_context_var_names}
+                  specialVarKinds={metadata?.special_var_kinds}
                   playbackControls={{
                     isPlaying: playback.isPlaying,
                     currentStep: playback.currentStep,

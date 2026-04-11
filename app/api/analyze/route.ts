@@ -34,6 +34,18 @@ type AnalyzeAiResponse = {
     pivot_mode?: "index" | "value_in_array";
   }>;
   linear_context_var_names?: string[];
+  /** 변수명 → 특수 자료구조 뷰 종류 — 코드 맥락으로만 판별, 이름 무관 */
+  special_var_kinds?: Record<
+    string,
+    | "HEAP"
+    | "QUEUE"
+    | "STACK"
+    | "DEQUE"
+    | "UNIONFIND"
+    | "VISITED"
+    | "DISTANCE"
+    | "PARENT_TREE"
+  >;
 };
 
 const ANALYZE_CODE_CHAR_LIMIT = 5000;
@@ -211,6 +223,7 @@ const ANALYZE_GEMINI_SCHEMA: object = {
       },
     },
     linear_context_var_names: { type: "array", items: { type: "string" } },
+    special_var_kinds: { type: "object" },
   },
   required: [
     "algorithm",
@@ -313,6 +326,38 @@ function normalizeResponse(
     10,
   );
 
+  type SpecialKind =
+    | "HEAP"
+    | "QUEUE"
+    | "STACK"
+    | "DEQUE"
+    | "UNIONFIND"
+    | "VISITED"
+    | "DISTANCE"
+    | "PARENT_TREE";
+  const validSpecialKinds = new Set<SpecialKind>([
+    "HEAP",
+    "QUEUE",
+    "STACK",
+    "DEQUE",
+    "UNIONFIND",
+    "VISITED",
+    "DISTANCE",
+    "PARENT_TREE",
+  ]);
+  const specialVarKinds: Record<string, SpecialKind> = {};
+  if (
+    parsed.special_var_kinds &&
+    typeof parsed.special_var_kinds === "object"
+  ) {
+    Object.entries(parsed.special_var_kinds).forEach(([vn, kind]) => {
+      if (!varNames.includes(vn)) return;
+      if (validSpecialKinds.has(kind as SpecialKind)) {
+        specialVarKinds[vn] = kind as SpecialKind;
+      }
+    });
+  }
+
   return {
     algorithm: parsed.algorithm || "Unknown",
     display_name: parsed.display_name || strategy,
@@ -346,6 +391,8 @@ function normalizeResponse(
     var_mapping: validMap,
     linear_pivots: linearPivots,
     linear_context_var_names: linearContextVarNames,
+    special_var_kinds:
+      Object.keys(specialVarKinds).length > 0 ? specialVarKinds : undefined,
   };
 }
 
@@ -506,6 +553,166 @@ function applyGraphModeInference(
   return { ...meta, graph_mode: inferred };
 }
 
+type SpecialKindValue =
+  | "HEAP"
+  | "QUEUE"
+  | "STACK"
+  | "DEQUE"
+  | "UNIONFIND"
+  | "VISITED"
+  | "DISTANCE"
+  | "PARENT_TREE";
+
+/**
+ * 코드 패턴 분석으로 special_var_kinds를 보완한다.
+ * 변수 '이름'이 아니라 해당 변수에 가해지는 연산(heapq.heappush(v,...), .popleft() 등)으로 판별.
+ * AI가 이미 채운 항목은 덮어쓰지 않는다.
+ */
+function enrichSpecialVarKinds(
+  meta: AnalyzeMetadata,
+  code: string,
+  varTypes: Record<string, string>,
+): AnalyzeMetadata {
+  const varNames = Object.keys(varTypes);
+  const existing = meta.special_var_kinds ?? {};
+  const extra: Record<string, SpecialKindValue> = {};
+
+  // HEAP: heapq.heappush(var, ...) 또는 heapq.heappop(var) 에 직접 쓰인 변수
+  const heapOpRe =
+    /heapq\s*\.\s*(?:heappush|heappop|heapreplace|heappushpop)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)/g;
+  let m: RegExpExecArray | null;
+  while ((m = heapOpRe.exec(code)) !== null) {
+    const v = m[1];
+    if (varNames.includes(v) && !existing[v] && !extra[v]) extra[v] = "HEAP";
+  }
+
+  // QUEUE: deque()로 초기화된 변수 + popleft 사용
+  const dequeInitRe =
+    /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:collections\.)?deque\s*\(/g;
+  while ((m = dequeInitRe.exec(code)) !== null) {
+    const v = m[1];
+    if (!varNames.includes(v) || existing[v] || extra[v]) continue;
+    const hasPopleft = new RegExp(`\\b${v}\\s*\\.\\s*popleft\\s*\\(`).test(
+      code,
+    );
+    const hasAppendleft = new RegExp(
+      `\\b${v}\\s*\\.\\s*appendleft\\s*\\(`,
+    ).test(code);
+    if (hasPopleft && !hasAppendleft) extra[v] = "QUEUE";
+    else if (hasPopleft && hasAppendleft) extra[v] = "DEQUE";
+    else if (hasAppendleft) extra[v] = "DEQUE";
+  }
+
+  // UNIONFIND: parent[x] = parent[parent[x]] 형태 경로 압축 패턴
+  const ufAssignRe =
+    /\b([A-Za-z_][A-Za-z0-9_]*)\s*\[([A-Za-z_][A-Za-z0-9_]*)\]\s*=\s*\1\s*\[\1\s*\[/g;
+  while ((m = ufAssignRe.exec(code)) !== null) {
+    const v = m[1];
+    if (varNames.includes(v) && !existing[v] && !extra[v])
+      extra[v] = "UNIONFIND";
+  }
+  // 보조: def find(...) 함수 내에서 쓰인 배열
+  const findFuncRe =
+    /def\s+find\s*\([^)]*\)[\s\S]*?return\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[/g;
+  while ((m = findFuncRe.exec(code)) !== null) {
+    const v = m[1];
+    if (varNames.includes(v) && !existing[v] && !extra[v])
+      extra[v] = "UNIONFIND";
+  }
+
+  // DISTANCE: 최단거리 배열 — [INF] * n 또는 float('inf')로 초기화
+  const distInitRe =
+    /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\[(?:INF|float\s*\(\s*['"]inf['"]\s*\)|10\s*\*\s*\*\s*\d+|1e\d+|987654321|999999999)[^\]]*\]\s*\*\s*\w/g;
+  while ((m = distInitRe.exec(code)) !== null) {
+    const v = m[1];
+    if (varNames.includes(v) && !existing[v] && !extra[v])
+      extra[v] = "DISTANCE";
+  }
+
+  // STACK: list로 .append() + .pop() 로 쓰이는 변수 (LIFO)
+  // deque로 초기화된 건 이미 위에서 처리됐으므로 list 기반만
+  const stackCandidates = new Set<string>();
+  const appendRe = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*append\s*\(/g;
+  while ((m = appendRe.exec(code)) !== null) {
+    const v = m[1];
+    if (varNames.includes(v) && !existing[v] && !extra[v])
+      stackCandidates.add(v);
+  }
+  for (const v of stackCandidates) {
+    const hasPop = new RegExp(`\\b${v}\\s*\\.\\s*pop\\s*\\(`).test(code);
+    const hasPopleft = new RegExp(`\\b${v}\\s*\\.\\s*popleft\\s*\\(`).test(
+      code,
+    );
+    const hasHeapOp = new RegExp(
+      `heapq\\s*\\.\\s*(?:heappush|heappop)\\s*\\(\\s*${v}\\b`,
+    ).test(code);
+    const hasTopAccess = new RegExp(`\\b${v}\\s*\\[\\s*-\\s*1\\s*\\]`).test(
+      code,
+    );
+    if ((hasPop || hasTopAccess) && !hasPopleft && !hasHeapOp)
+      extra[v] = "STACK";
+  }
+
+  // VISITED: bool/0-1 배열 — [False]*n 또는 [0]*n 으로 초기화되고 visited[node]=True 패턴
+  const visitedInitRe =
+    /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\[\s*(?:False|0)\s*\]\s*\*\s*\w/g;
+  while ((m = visitedInitRe.exec(code)) !== null) {
+    const v = m[1];
+    if (!varNames.includes(v) || existing[v] || extra[v]) continue;
+    const hasVisitedSet = new RegExp(
+      `\\b${v}\\s*\\[\\s*\\w+\\s*\\]\\s*=\\s*(?:True|1)`,
+    ).test(code);
+    if (hasVisitedSet) extra[v] = "VISITED";
+  }
+
+  if (Object.keys(extra).length === 0) return meta;
+  return { ...meta, special_var_kinds: { ...existing, ...extra } };
+}
+
+/**
+ * 코드 패턴으로 linear_pivots를 보완한다.
+ * AI가 이미 linear_pivots를 반환했으면 건드리지 않는다.
+ * 투포인터·슬라이딩윈도우 패턴: arrVar[intVar] 형태로 쓰이는 정수 변수 2개 이상 → index 피벗.
+ */
+function enrichLinearPivots(
+  meta: AnalyzeMetadata,
+  code: string,
+  varTypes: Record<string, string>,
+): AnalyzeMetadata {
+  if (meta.linear_pivots && meta.linear_pivots.length > 0) return meta;
+
+  const intVars = Object.entries(varTypes)
+    .filter(([, t]) => t === "int")
+    .map(([k]) => k);
+  const listVars = Object.entries(varTypes)
+    .filter(([, t]) => t === "list")
+    .map(([k]) => k);
+
+  if (intVars.length < 2 || listVars.length === 0) return meta;
+
+  for (const arrVar of listVars) {
+    const indexedVars: string[] = [];
+    for (const intVar of intVars) {
+      const usedAsIndex = new RegExp(
+        `\\b${arrVar}\\s*\\[\\s*${intVar}\\s*\\]`,
+      ).test(code);
+      if (!usedAsIndex) continue;
+      const changes = new RegExp(`\\b${intVar}\\s*[+\\-]?=`).test(code);
+      if (changes) indexedVars.push(intVar);
+    }
+    if (indexedVars.length >= 2) {
+      const pivots: LinearPivotSpec[] = indexedVars.map((v) => ({
+        var_name: v,
+        pivot_mode: "index" as const,
+        indexes_1d_var: listVars.length > 1 ? arrVar : undefined,
+        badge: v.slice(0, 2),
+      }));
+      return { ...meta, linear_pivots: pivots };
+    }
+  }
+  return meta;
+}
+
 async function analyzeWithAi(
   code: string,
   varTypes: Record<string, string>,
@@ -570,8 +777,20 @@ async function analyzeWithAi(
     '예(투포인터): [{"var_name":"s","pivot_mode":"index","indexes_1d_var":"array"},{"var_name":"e","pivot_mode":"index","indexes_1d_var":"array"}].',
     "linear_context_var_names: 스텝 요약 줄 스칼라(선택). 피벗 값 표시용으로 pivot을 넣을 수 있음.",
     "",
+    "【special_var_kinds】코드에서 특수 자료구조로 쓰이는 변수가 있으면 반드시 채운다.",
+    "핵심 원칙: 변수 '이름'이 아니라 코드에서 그 변수가 실제로 하는 '역할과 연산'으로만 판별한다. varTypes에 없는 변수명은 포함하지 말 것.",
+    "HEAP: heapq.heappush/heappop이 이 변수에 직접 적용되고 우선순위 큐로 사용되는 경우.",
+    "QUEUE: deque() 또는 list로 선언되고 .append()/.popleft() 또는 순서대로 front/back 삽입·삭제되는 BFS 큐.",
+    "STACK: list로 .append()/.pop() 만 쓰이고 LIFO 스택으로 사용되는 경우(DFS 반복, 괄호, 단조 스택).",
+    "DEQUE: deque()로 선언되고 양쪽(appendleft/popleft/append/pop)을 모두 사용하는 경우.",
+    "UNIONFIND: find(x)/union(a,b) 형태로 쓰이는 부모 배열. rank/size 배열도 여기에 포함.",
+    "VISITED: 방문 여부만 담는 bool/0-1 1D 배열. BFS·DFS에서 visited[node]=True/1로 표시.",
+    "DISTANCE: 최단거리/비용 배열. 초기값 INF로 채우고 갱신하는 패턴(다익스트라·BFS 거리 등).",
+    "PARENT_TREE: 트리의 부모 포인터 배열(parent[child]=parent_node). Union-Find가 아닌 일반 트리 탐색.",
+    "해당 없으면 {}.",
+    "",
     "출력 JSON 스키마:",
-    '{"algorithm":"string","display_name":"string","strategy":"GRID|LINEAR|GRID_LINEAR|GRAPH","tags":["string"],"detected_data_structures":["string"],"detected_algorithms":["string"],"summary":"string","graph_mode":"directed|undirected","graph_var_name":"string","graph_representation":"GRID|MAP","uses_bitmasking":"boolean","time_complexity":"string","key_vars":["string"],"var_mapping":{"ROLE":{"var_name":"string","panel":"GRID|LINEAR|GRAPH|VARIABLES"}},"linear_pivots":[{"var_name":"string","badge":"string","indexes_1d_var":"string","pivot_mode":"index|value_in_array"}],"linear_context_var_names":["string"]}',
+    '{"algorithm":"string","display_name":"string","strategy":"GRID|LINEAR|GRID_LINEAR|GRAPH","tags":["string"],"detected_data_structures":["string"],"detected_algorithms":["string"],"summary":"string","graph_mode":"directed|undirected","graph_var_name":"string","graph_representation":"GRID|MAP","uses_bitmasking":"boolean","time_complexity":"string","key_vars":["string"],"var_mapping":{"ROLE":{"var_name":"string","panel":"GRID|LINEAR|GRAPH|VARIABLES"}},"linear_pivots":[{"var_name":"string","badge":"string","indexes_1d_var":"string","pivot_mode":"index|value_in_array"}],"linear_context_var_names":["string"],"special_var_kinds":{"var_name":"HEAP|QUEUE|STACK|DEQUE|UNIONFIND|VISITED|DISTANCE|PARENT_TREE"}}',
     "",
     `[code]\n${compactCode}`,
     "",
@@ -602,7 +821,9 @@ async function analyzeWithAi(
         ? applyJsArrayHints(withDeque, code, varTypes)
         : withDeque;
     const guarded = applyDirectionMapGuards(withJsArray, code);
-    return applyGraphModeInference(guarded, code);
+    const withGraphMode = applyGraphModeInference(guarded, code);
+    const withSpecial = enrichSpecialVarKinds(withGraphMode, code, varTypes);
+    return enrichLinearPivots(withSpecial, code, varTypes);
   };
 
   const raw = await callWithFallback(prompt, chain, geminiOpts);

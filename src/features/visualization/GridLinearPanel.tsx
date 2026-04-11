@@ -264,7 +264,10 @@ export function GridLinearPanel({
   const focusIndex = typeof step.vars.nk === "number"
     ? step.vars.nk
     : (typeof step.vars.k === "number" ? step.vars.k : 0);
-  const linearVar = resolveLinearVar(step, linearArrayVarName);
+  // If var_mapping is empty, fall back to indexes_1d_var from linearPivots
+  const effectiveLinearVarName =
+    linearArrayVarName ?? linearPivots?.find((p) => p.indexes_1d_var)?.indexes_1d_var;
+  const linearVar = resolveLinearVar(step, effectiveLinearVarName);
   const shouldRender3D = strategy !== "LINEAR" && strategy !== "GRAPH" && !!grid3DVar;
   const shouldRenderGrid = !shouldRender3D && strategy !== "LINEAR" && strategy !== "GRAPH" && !!gridVar;
   const cells = shouldRenderGrid
