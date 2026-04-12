@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useMemo } from "react";
 import { CATEGORIES, EXAMPLES } from "@/data/examples";
-import type { ExampleCategory, ExampleItem } from "@/data/examples";
+import type { ExampleCategory, ExampleItem, ExampleVariant } from "@/data/examples";
 import { ExampleCard } from "./ExampleCard";
 
 interface ExampleGalleryProps {
@@ -9,8 +9,7 @@ interface ExampleGalleryProps {
   confirmTarget: ExampleItem | null;
   onClose: () => void;
   onSelectCategory: (cat: ExampleCategory) => void;
-  onSelect: (example: ExampleItem) => void;
-  onRequestConfirm: (example: ExampleItem) => void;
+  onRequestConfirm: (example: ExampleItem, variant: ExampleVariant) => void;
   onCancelConfirm: () => void;
   onConfirm: () => void;
 }
@@ -21,7 +20,6 @@ export function ExampleGallery({
   confirmTarget,
   onClose,
   onSelectCategory,
-  onSelect,
   onRequestConfirm,
   onCancelConfirm,
   onConfirm,

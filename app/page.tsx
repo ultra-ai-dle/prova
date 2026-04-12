@@ -21,7 +21,7 @@ import {
 } from "@/components/icons";
 import { ExampleGallery } from "@/features/gallery/ExampleGallery";
 import { useGallery } from "@/features/gallery/useGallery";
-import type { ExampleItem } from "@/data/examples";
+import type { ExampleItem, ExampleVariant } from "@/data/examples";
 import { detectLanguageFromCode } from "@/lib/languageDetection";
 import { highlightJsLine, highlightPythonLine } from "@/lib/syntaxHighlight";
 import { maxNumericAbs, formatWithBitMode } from "@/lib/formatValue";
@@ -330,21 +330,21 @@ export default function Page() {
   }, []);
 
   const handleGallerySelect = useCallback(
-    (example: ExampleItem) => {
-      setCode(example.code);
-      setStdin(example.stdin);
-      setLanguage(example.language);
+    (variant: ExampleVariant) => {
+      setCode(variant.code);
+      setStdin(variant.stdin);
+      setLanguage(variant.language);
       gallery.close();
     },
     [setStdin, gallery],
   );
 
   const handleGalleryCardClick = useCallback(
-    (example: ExampleItem) => {
+    (example: ExampleItem, variant: ExampleVariant) => {
       if (code.trim() === "") {
-        handleGallerySelect(example);
+        handleGallerySelect(variant);
       } else {
-        gallery.requestConfirm(example);
+        gallery.requestConfirm(example, variant);
       }
     },
     [code, handleGallerySelect, gallery],
@@ -487,11 +487,10 @@ export default function Page() {
         confirmTarget={gallery.confirmTarget}
         onClose={gallery.close}
         onSelectCategory={gallery.selectCategory}
-        onSelect={handleGallerySelect}
         onRequestConfirm={handleGalleryCardClick}
         onCancelConfirm={gallery.cancelConfirm}
         onConfirm={() => {
-          if (gallery.confirmTarget) handleGallerySelect(gallery.confirmTarget);
+          if (gallery.confirmVariant) handleGallerySelect(gallery.confirmVariant);
         }}
       />
 

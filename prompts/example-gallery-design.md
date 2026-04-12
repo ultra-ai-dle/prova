@@ -116,13 +116,27 @@
 
 각 예제 카드에 표시할 정보:
 
+```
+┌─────────────────────┐
+│ Bubble Sort  버블정렬│
+│                     │
+│ [Py] [JS] [Java]    │  ← variants에 있는 언어만 표시
+│                     │
+│ ★ Easy  #sorting    │
+└─────────────────────┘
+```
+
 | 필드 | 예시 | 비고 |
 |------|------|------|
 | 제목 | "Bubble Sort" | 영문 (국제적) |
 | 한글명 | "버블 정렬" | 서브텍스트 |
+| 언어 토글 | `[Py] [JS]` | variants에 있는 언어만 pill 버튼으로 표시 |
 | 난이도 | ★ Easy | 초록 뱃지 / ★★ Medium 노란 뱃지 |
 | 태그 | `#sorting` `#array` | 최대 2개 |
-| 언어 | 🐍 / JS | 작은 아이콘 |
+
+- variants가 1개면 언어 토글 미표시
+- 선택된 언어 pill은 강조 (파란 테두리)
+- 카드 클릭 시 현재 선택된 언어의 variant로 로드
 
 ### 선택 후 흐름
 
@@ -196,6 +210,12 @@ export interface CategoryMeta {
   labelEn: string;      // "Sorting"
 }
 
+export interface ExampleVariant {
+  language: "python" | "javascript" | "java";
+  code: string;
+  stdin: string;
+}
+
 export interface ExampleItem {
   id: string;                    // "bubble-sort"
   title: string;                 // "Bubble Sort"
@@ -203,9 +223,7 @@ export interface ExampleItem {
   category: ExampleCategory;
   tags: string[];                // ["sorting", "array"]
   difficulty: "easy" | "medium";
-  language: "python" | "javascript";
-  code: string;
-  stdin: string;
+  variants: ExampleVariant[];    // 언어별 코드. 1차는 python만
   featured: boolean;             // true → 갤러리 초기 노출
 }
 ```
@@ -237,16 +255,20 @@ export const EXAMPLES: ExampleItem[] = [
     category: "sorting",
     tags: ["sorting", "array"],
     difficulty: "easy",
-    language: "python",
     featured: true,
-    stdin: "5\n3 1 4 1 5",
-    code: `n = int(input())
-arr = list(map(int, input().split()))
-for i in range(n):
-    for j in range(n - 1 - i):
-        if arr[j] > arr[j + 1]:
-            arr[j], arr[j + 1] = arr[j + 1], arr[j]
-print(arr)`,
+    variants: [
+      {
+        language: "python",
+        code: `...`,
+        stdin: "6\n5 3 8 1 4 2",
+      },
+      {
+        language: "javascript",
+        code: `...`,
+        stdin: "6\n5 3 8 1 4 2",
+      },
+      // Java는 추가 시 여기에 append
+    ],
   },
   // ... 추가 예제
 ];
@@ -288,21 +310,21 @@ print(arr)`,
 
 #### 1-2. examples.ts 작성 순서
 
-1. 타입 정의 (`ExampleCategory`, `CategoryMeta`, `ExampleItem`)
+1. 타입 정의 (`ExampleCategory`, `CategoryMeta`, `ExampleVariant`, `ExampleItem`)
 2. 카테고리별 featured 예제 데이터 작성
-   - mocks에서 code + stdin 복사 (17개)
-   - 직접 작성 (3개: factorial, tower-of-hanoi, n-queens)
+   - mocks에서 python.md + javascript.md → variants 배열로 복사 (17개)
+   - 직접 작성 (3개: factorial, tower-of-hanoi, n-queens — Python + JS 모두)
 3. 메타데이터(title, titleKo, difficulty, tags, featured) 수동 작성
-4. 각 예제 실행 테스트 (Pyodide Worker에서 정상 동작 확인)
+4. 각 예제 실행 테스트 (Python + JS 모두 정상 동작 확인)
 
 #### 1-3. 향후 확장 고려
 
 나중에 전체 목록이 필요해지면 빌드타임 파서로 전환 가능하도록
 mocks 파일 구조와 `examples.ts` 타입을 호환되게 유지한다:
 - mocks의 디렉토리명 → `ExampleItem.id`
-- mocks의 코드블록 → `ExampleItem.code`
-- mocks의 입력블록 → `ExampleItem.stdin`
+- mocks의 `python.md` / `javascript.md` → `ExampleVariant[]`
 - 메타데이터(title, difficulty, tags)는 mocks에 frontmatter 추가로 해결 가능
+- Java variant는 mocks `java.md`에서 동일 방식으로 추가
 
 ### Phase 2: 갤러리 UI
 
@@ -311,7 +333,7 @@ mocks 파일 구조와 `examples.ts` 타입을 호환되게 유지한다:
 | 파일 | 역할 |
 |------|------|
 | `src/features/gallery/useGallery.ts` | 모달 열기/닫기 + 카테고리 선택 + 덮어쓰기 확인 상태 |
-| `src/features/gallery/ExampleCard.tsx` | 개별 예제 카드 (제목, 난이도 뱃지, 태그) |
+| `src/features/gallery/ExampleCard.tsx` | 개별 예제 카드 (제목, 언어 토글, 난이도 뱃지, 태그) |
 | `src/features/gallery/ExampleGallery.tsx` | 갤러리 모달 (카테고리 탭 + 카드 그리드 + 더보기 + 인라인 덮어쓰기 다이얼로그) |
 
 #### 작업 순서
