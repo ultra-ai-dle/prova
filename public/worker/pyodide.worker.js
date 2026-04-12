@@ -155,6 +155,82 @@ def _collect_user_symbols(src):
 
 _USER_SYMBOLS = _collect_user_symbols(_prova_code)
 
+def _collect_init_lines(src):
+    """
+    초기화 전용 list/dict comprehension 라인 번호를 수집한다.
+    조건: 변수에 직접 할당되고, 가장 바깥 루프가 range() 이고,
+         루프 변수가 결과 표현식에서 인덱스/키로만 쓰이거나 전혀 안 쓰이면 초기화로 간주.
+    예: new_board = [[] for _ in range(n)]
+        dp = [[0]*m for _ in range(n)]
+        visited = [False]*n  ← 이건 listcomp 아니라 괜찮
+    """
+    init_lines = set()
+    try:
+        tree = ast.parse(src)
+    except Exception:
+        return init_lines
+
+    def _uses_only_as_index(loop_var, elt_node):
+        """루프 변수가 elt_node 안에서 단순 인덱스로만 쓰이거나 전혀 안 쓰이는지"""
+        if not isinstance(loop_var, ast.Name):
+            return True  # tuple/starred → 복잡하므로 패스
+        vname = loop_var.id
+        if vname == "_":
+            return True  # 무시 변수
+        # elt 안에서 Name(vname) 등장 여부
+        for n in ast.walk(elt_node):
+            if isinstance(n, ast.Name) and n.id == vname:
+                return False
+        return True  # 루프 변수가 elt에서 전혀 안 쓰임 → 초기화
+
+    def _is_range_iter(iter_node):
+        """이터레이터가 range(...)인지"""
+        if isinstance(iter_node, ast.Call):
+            func = iter_node.func
+            if isinstance(func, ast.Name) and func.id == "range":
+                return True
+            if isinstance(func, ast.Attribute) and func.attr == "range":
+                return True
+        return False
+
+    def _is_init_listcomp(node):
+        """ListComp 노드가 초기화 전용인지"""
+        if not isinstance(node, ast.ListComp):
+            return False
+        # 가장 바깥 generator
+        gen = node.generators[0]
+        if not _is_range_iter(gen.iter):
+            return False
+        if gen.ifs:  # 조건 필터 있으면 알고리즘 로직
+            return False
+        # elt(결과 표현식)를 본다
+        elt = node.elt
+        # elt 자체가 다시 ListComp → 중첩 초기화 (재귀 확인)
+        if isinstance(elt, ast.ListComp):
+            return _is_init_listcomp(elt)
+        # elt가 상수/이름/단순 연산 → 초기화
+        # elt 안에서 바깥 루프 변수가 단순히 안 쓰이면 OK
+        return _uses_only_as_index(gen.target, elt)
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            # 할당의 value 가져오기
+            if isinstance(node, ast.Assign):
+                val = node.value
+            elif isinstance(node, ast.AnnAssign):
+                val = node.value
+            else:
+                val = node.value
+            if val is None:
+                continue
+            if _is_init_listcomp(val) and hasattr(val, "lineno"):
+                init_lines.add(val.lineno)
+    return init_lines
+
+_INIT_LINES = _collect_init_lines(_prova_code)
+# listcomp/genexpr 프레임 안에 있고 호출자 라인이 초기화 라인이면 skip
+_init_frame_key = None  # (caller_lineno, caller_func) — 현재 skip 중인 init 프레임 식별자
+
 def _safe(v, depth=0):
     if v is None or isinstance(v, (bool, int, float, str)):
         if isinstance(v, float) and not math.isfinite(v):
@@ -226,12 +302,50 @@ def _frame_depth(frame):
     return depth
 
 def _tracer(frame, event, arg):
-    global _step, _last_line, _trace_disabled, _trace_truncated
+    global _step, _last_line, _trace_disabled, _trace_truncated, _init_frame_key
     if _trace_disabled:
         return None
     if frame.f_code.co_filename != "<prova_user_code>":
         return _tracer
-    if event not in ("line", "call"):
+    if event not in ("line", "call", "return"):
+        return _tracer
+
+    # ── Init-listcomp skip logic ──────────────────────────────────────────────
+    # 현재 프레임이 <listcomp>/<genexpr>/<setcomp>/<dictcomp>이고
+    # 호출자 라인이 초기화 라인인 경우 이 프레임 내부 이벤트를 전부 무시.
+    fname = frame.f_code.co_name
+    _is_comp_frame = fname in ("<listcomp>", "<genexpr>", "<setcomp>", "<dictcomp>")
+
+    if _is_comp_frame:
+        # 호출자 라인 번호로 초기화 여부 판단
+        caller_line = frame.f_back.f_lineno if frame.f_back else -1
+        key = (caller_line, frame.f_back.f_code.co_name if frame.f_back else "")
+        if caller_line in _INIT_LINES:
+            # 진입: init 프레임 키 설정
+            if event == "call":
+                _init_frame_key = key
+            # 이 프레임 안의 모든 이벤트 skip
+            if _init_frame_key == key:
+                if event == "return":
+                    _init_frame_key = None  # 프레임 종료 — 부모에서 결과 step 찍음
+                return _tracer
+        # INIT_LINES에 없는 comp 프레임은 정상 추적 (실제 알고리즘 로직)
+
+    # ── Return event ─────────────────────────────────────────────────────────
+    if event == "return":
+        func_name = frame.f_code.co_name
+        if func_name not in ("<module>", "<lambda>", "<listcomp>", "<genexpr>", "<setcomp>", "<dictcomp>") and not _trace_truncated:
+            _trace.append({
+                "step": _step,
+                "line": int(frame.f_lineno),
+                "vars": {},
+                "scope": { "func": func_name, "depth": _frame_depth(frame) },
+                "parent_frames": [],
+                "stdout": list(_stdout_lines),
+                "runtimeError": None,
+                "event": "return",
+                "returnValue": _safe(arg)
+            })
         return _tracer
 
     if _step >= _MAX_TRACE_STEPS:

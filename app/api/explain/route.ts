@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { RawTraceStep, AnnotatedStep } from "@/types/prova";
 import { buildChain, callWithFallback } from "@/lib/ai-providers";
+import { stripCodeFence } from "@/lib/jsonParsing";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -48,12 +49,8 @@ function buildPrompt(
 
 // ── Response parsing ──────────────────────────────────────────────────────────
 
-function stripFence(text: string): string {
-  return text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/, "").trim();
-}
-
 function extractJsonArray(text: string): unknown[] | null {
-  const cleaned = stripFence(text);
+  const cleaned = stripCodeFence(text);
   // Direct array
   const start = cleaned.indexOf("[");
   if (start >= 0) {
