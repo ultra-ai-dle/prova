@@ -532,22 +532,32 @@ export function GraphPanel({
   // specialVarKindsProp이 undefined일 때 매 렌더마다 새 {}를 만들지 않도록 안정화
   const specialVarKinds = specialVarKindsProp ?? EMPTY_SPECIAL_VAR_KINDS;
 
+  // traceSteps가 바뀔 때(새 실행)만 재계산 — 매 스텝마다 O(n) 재스캔하지 않도록 분리
+  const stickyVarsByStep = useMemo(() => {
+    if (traceSteps.length === 0) return [] as Array<Record<string, unknown>>;
+    const result: Array<Record<string, unknown>> = [];
+    const acc: Record<string, unknown> = {};
+    for (const s of traceSteps) {
+      Object.entries(s.vars ?? {}).forEach(([k, v]) => {
+        if (isRenderableStructure(v)) acc[k] = v;
+      });
+      result.push({ ...acc });
+    }
+    return result;
+  }, [traceSteps]);
+
   const parsed = useMemo(() => {
     if (!step) return null;
     const currentVars = step.vars ?? {};
-    const historySource = traceSteps.length > 0 ? traceSteps : [step];
-    const historyUpToCurrent = historySource.filter((s) => (s.step ?? 0) <= (step.step ?? 0));
 
-    // Keep the latest renderable state across steps so visualization
-    // does not disappear while stepping inside recursive/function scopes.
-    const stickyRenderableVars: Record<string, unknown> = {};
-    historyUpToCurrent.forEach((s) => {
-      Object.entries(s.vars ?? {}).forEach(([k, v]) => {
-        if (!isRenderableStructure(v)) return;
-        stickyRenderableVars[k] = v;
-      });
-    });
+    // O(1) 조회: 현재 step index 기준으로 사전 계산된 sticky vars 사용
+    const stepIndex = step.step ?? 0;
+    const stickyRenderableVars =
+      stickyVarsByStep.length > 0
+        ? (stickyVarsByStep[stepIndex] ?? stickyVarsByStep.at(-1) ?? {})
+        : currentVars;
     const vars: Record<string, unknown> = { ...stickyRenderableVars, ...currentVars };
+
     const explicitGraphVars = [
       ...graphVarNames,
       ...(graphVarName ? [graphVarName] : []),
@@ -589,11 +599,16 @@ export function GraphPanel({
               : is1DArray(value)
                 ? "ARRAY1D"
                 : "OBJECT";
-        return { key, value, kind: kind as "ARRAY2D" | "ARRAY1D" | "OBJECT" | "GRAPHLIKE" | SpecialKind };
+        // buildGraphFromValue를 JSX 인라인에서 useMemo 안으로 이동
+        const graph =
+          kind === "ARRAY2D" || kind === "GRAPHLIKE"
+            ? buildGraphFromValue(value)
+            : null;
+        return { key, value, kind: kind as "ARRAY2D" | "ARRAY1D" | "OBJECT" | "GRAPHLIKE" | SpecialKind, graph };
       });
 
     return { graphKeys, structures };
-  }, [graphVarName, graphVarNames, step, traceSteps, specialVarKinds]);
+  }, [graphVarName, graphVarNames, step, stickyVarsByStep, specialVarKinds]);
 
   const maxArrayLenByVar = useMemo(() => {
     const out: Record<string, number> = {};
@@ -739,7 +754,7 @@ export function GraphPanel({
               ) : (structure.kind === "ARRAY2D" || structure.kind === "GRAPHLIKE") && resolvedMode === "GRAPH" ? (
                 <GraphCanvas
                   graphKey={structure.key}
-                  graph={buildGraphFromValue(structure.value)}
+                  graph={structure.graph ?? { nodes: [], links: [] }}
                   graphMode={graphMode}
                   positionRef={positionRef}
                   stepState={stepState}
