@@ -898,8 +898,10 @@ export function GraphPanel({
 
             const graphForThisKey = structure.graph ?? { nodes: [], links: [] };
             const structurallyTree = isStructuralTree(graphForThisKey);
-            const canToggleTreeLayout = resolvedMode === "GRAPH" && isTreeHint && structurallyTree;
-            const useTreeLayout = canToggleTreeLayout && (treeLayoutByVar[structure.key] ?? true);
+            // GRAPHLIKE면 항상 토글 노출. 기본값: 구조적 트리 + AI 트리 힌트면 TREE, 아니면 FORCE
+            const canToggleTreeLayout = resolvedMode === "GRAPH" && !isSpecial;
+            const defaultTreeLayout = structurallyTree && isTreeHint;
+            const useTreeLayout = canToggleTreeLayout && (treeLayoutByVar[structure.key] ?? defaultTreeLayout);
 
             return (
             <div key={structure.key} className="rounded border border-prova-line bg-[#0f141a] p-2">
