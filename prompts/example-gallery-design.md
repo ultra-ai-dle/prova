@@ -126,13 +126,34 @@
 
 ### 선택 후 흐름
 
+**덮어쓰기 확인: 인라인 다이얼로그** (`window.confirm` 사용하지 않음)
+
+모달 내부에 카드 영역을 대체하는 인라인 확인 UI를 표시한다:
+
+```
+┌─────────────────────────────────────────────────┐
+│  예제 갤러리                              [✕]   │
+├──────────┬──────────────────────────────────────┤
+│          │                                      │
+│ ● 정렬   │  ┌──────────────────────────────────┐│
+│   탐색   │  │  현재 코드를 덮어쓸까요?          ││
+│   자료구조│  │  "Bubble Sort" 예제로 교체됩니다. ││
+│   그래프  │  │                                  ││
+│   DP     │  │      [ 취소 ]   [ 확인 ]         ││
+│   재귀   │  └──────────────────────────────────┘│
+│          │                                      │
+├──────────┴──────────────────────────────────────┤
+│  Python · JavaScript 지원 | 선택하면 에디터에 로드  │
+└─────────────────────────────────────────────────┘
+```
+
 ```
 사용자가 카드 클릭
   ├── 현재 코드 비어있음 → 즉시 로드
   ├── 현재 코드 === localStorage 기본값 → 즉시 로드
-  └── 현재 코드 수정됨 → 확인 다이얼로그 ("현재 코드를 덮어쓸까요?")
+  └── 현재 코드 수정됨 → 인라인 다이얼로그 표시
        ├── 확인 → 로드
-       └── 취소 → 갤러리 유지
+       └── 취소 → 카드 그리드로 복귀
 
 로드 시:
   1. code ← example.code
@@ -233,41 +254,89 @@ print(arr)`,
 
 ---
 
-## 5. 구현 계획
+## 5. Phase별 상세 작업 계획
 
-### 신규 파일
+### Phase 1: 예제 데이터 작성 (수동)
+
+#### 1-1. featured 예제 목록 — mocks 파일 매핑
+
+| 예제 ID | mocks 파일 경로 | title | titleKo | difficulty | tags | featured |
+|---------|----------------|-------|---------|------------|------|----------|
+| `bubble-sort` | `algorithms/sort/bubble/python.md` | Bubble Sort | 버블 정렬 | easy | `sorting`, `array` | true |
+| `selection-sort` | `algorithms/sort/selection/python.md` | Selection Sort | 선택 정렬 | easy | `sorting`, `array` | true |
+| `insertion-sort` | `algorithms/sort/insertion/python.md` | Insertion Sort | 삽입 정렬 | easy | `sorting`, `array` | true |
+| `binary-search` | `algorithms/binary-search/python.md` | Binary Search | 이진 탐색 | easy | `search`, `array` | true |
+| `two-pointers` | `algorithms/two-pointers/python.md` | Two Pointers | 투 포인터 | medium | `search`, `array` | true |
+| `sliding-window` | `algorithms/sliding-window/python.md` | Sliding Window | 슬라이딩 윈도우 | medium | `search`, `array` | true |
+| `stack` | `data-structures/stack/python.md` | Stack | 스택 | easy | `data-structure`, `stack` | true |
+| `queue` | `data-structures/queue/python.md` | Queue | 큐 | easy | `data-structure`, `queue` | true |
+| `priority-queue` | `data-structures/priority-queue/python.md` | Priority Queue | 우선순위 큐 | medium | `data-structure`, `heap` | true |
+| `bfs` | `algorithms/route/bfs/python.md` | BFS | 너비 우선 탐색 | easy | `graph`, `traversal` | true |
+| `dfs` | `algorithms/route/dfs/python.md` | DFS | 깊이 우선 탐색 | easy | `graph`, `traversal` | true |
+| `dijkstra` | `algorithms/route/dijkstra/python.md` | Dijkstra | 다익스트라 | medium | `graph`, `shortest-path` | true |
+| `union-find` | `data-structures/union-find/python.md` | Union-Find | 유니온 파인드 | medium | `graph`, `disjoint-set` | true |
+| `fibonacci` | `algorithms/dp/fibonacci/python.md` | Fibonacci (DP) | 피보나치 (DP) | easy | `dp`, `memoization` | true |
+| `knapsack-01` | `algorithms/dp/knapsack-01/python.md` | 0/1 Knapsack | 0/1 배낭 | medium | `dp`, `2d-table` | true |
+| `lcs` | `algorithms/dp/lcs/python.md` | LCS | 최장 공통 부분수열 | medium | `dp`, `2d-table` | true |
+| `prefix-sum` | `algorithms/prefix-sum/python.md` | Prefix Sum | 누적합 | easy | `array`, `prefix-sum` | true |
+| `factorial` | **mocks 없음** — 직접 작성 | Factorial | 팩토리얼 | easy | `recursion`, `call-stack` | true |
+| `tower-of-hanoi` | **mocks 없음** — 직접 작성 | Tower of Hanoi | 하노이의 탑 | medium | `recursion`, `divide-and-conquer` | true |
+| `n-queens` | **mocks 없음** — 직접 작성 | N-Queens (4×4) | N-Queens (4×4) | medium | `recursion`, `backtracking` | true |
+
+> **참고**: 20개 중 17개는 mocks에서 code + stdin 복사 가능. 3개(factorial, tower-of-hanoi, n-queens)는 직접 작성.
+> 설계 초안의 "Linear Search"는 mocks에 없으므로 mocks에 있는 `prefix-sum`과 `sliding-window`로 교체.
+
+#### 1-2. examples.ts 작성 순서
+
+1. 타입 정의 (`ExampleCategory`, `CategoryMeta`, `ExampleItem`)
+2. 카테고리별 featured 예제 데이터 작성
+   - mocks에서 code + stdin 복사 (17개)
+   - 직접 작성 (3개: factorial, tower-of-hanoi, n-queens)
+3. 메타데이터(title, titleKo, difficulty, tags, featured) 수동 작성
+4. 각 예제 실행 테스트 (Pyodide Worker에서 정상 동작 확인)
+
+#### 1-3. 향후 확장 고려
+
+나중에 전체 목록이 필요해지면 빌드타임 파서로 전환 가능하도록
+mocks 파일 구조와 `examples.ts` 타입을 호환되게 유지한다:
+- mocks의 디렉토리명 → `ExampleItem.id`
+- mocks의 코드블록 → `ExampleItem.code`
+- mocks의 입력블록 → `ExampleItem.stdin`
+- 메타데이터(title, difficulty, tags)는 mocks에 frontmatter 추가로 해결 가능
+
+### Phase 2: 갤러리 UI
+
+#### 신규 파일
 
 | 파일 | 역할 |
 |------|------|
-| `src/data/examples.ts` | 타입 정의 + 카테고리 메타 + 전체 예제 데이터 |
-| `src/features/gallery/ExampleGallery.tsx` | 갤러리 모달 (카테고리 탭 + 카드 그리드 + 더보기) |
-| `src/features/gallery/ExampleCard.tsx` | 개별 예제 카드 컴포넌트 |
-| `src/features/gallery/useGallery.ts` | 모달 열기/닫기 + 카테고리 선택 + 필터 상태 |
+| `src/features/gallery/useGallery.ts` | 모달 열기/닫기 + 카테고리 선택 + 덮어쓰기 확인 상태 |
+| `src/features/gallery/ExampleCard.tsx` | 개별 예제 카드 (제목, 난이도 뱃지, 태그) |
+| `src/features/gallery/ExampleGallery.tsx` | 갤러리 모달 (카테고리 탭 + 카드 그리드 + 더보기 + 인라인 덮어쓰기 다이얼로그) |
 
-### 수정 파일
+#### 작업 순서
+
+1. `useGallery.ts` — `isOpen`, `selectedCategory`, `confirmTarget` (덮어쓰기 대상) 상태
+2. `ExampleCard.tsx` — 카드 UI (클릭 → `onSelect(example)`)
+3. `ExampleGallery.tsx` — 모달 레이아웃, 카테고리 필터, 카드 그리드, 인라인 확인 다이얼로그, ESC 닫기
+
+### Phase 3: page.tsx 연결
+
+#### 수정 파일
 
 | 파일 | 변경 내용 |
 |------|----------|
-| `app/page.tsx` | 헤더에 갤러리 버튼 추가, ExampleGallery 마운트, onSelect 핸들러 (code/stdin/language 세팅 + 덮어쓰기 확인) |
+| `app/page.tsx` | 헤더에 갤러리 버튼 추가, ExampleGallery 마운트, onSelect 핸들러 |
 | `src/components/icons/AppIcons.tsx` | 갤러리 전용 아이콘 추가 (또는 IconFiles 재활용) |
 
-### 구현 순서
+#### 작업 순서
 
-```
-Phase 1: 데이터 (examples.ts)
-  → 타입 정의 + 카테고리 메타 + 큐레이션 예제 ~20개 작성
-  → 각 예제를 Pyodide/JS Worker에서 실행 테스트
-
-Phase 2: 갤러리 UI
-  → useGallery.ts (상태 관리)
-  → ExampleCard.tsx (카드 컴포넌트)
-  → ExampleGallery.tsx (모달 + 카테고리 탭 + 그리드)
-
-Phase 3: page.tsx 연결
-  → 헤더 갤러리 버튼
-  → 모달 마운트
-  → onSelect: 덮어쓰기 확인 → code/stdin/language 세팅 → 모달 닫기
-```
+1. `AppIcons.tsx` — 갤러리 아이콘 추가 (필요 시)
+2. `page.tsx` — 헤더 우측에 갤러리 버튼 (`IconFiles`, 투어 아이콘 왼쪽)
+3. `page.tsx` — `ExampleGallery` 마운트 + `onSelect` 핸들러:
+   - 코드 비어있음 / 기본값 → 즉시 로드
+   - 코드 수정됨 → 인라인 다이얼로그 (확인 시 로드, 취소 시 카드 그리드 복귀)
+   - 로드: `setCode(example.code)`, `setStdin(example.stdin)`, `setLanguage(example.language)` → 모달 닫기
 
 ### 예상 난이도 및 리스크
 
@@ -275,8 +344,8 @@ Phase 3: page.tsx 연결
 |------|--------|--------|------|
 | 예제 데이터 작성 | 중 | 코드가 Worker에서 실행 안 될 수 있음 | 각 예제 실행 테스트 필수 |
 | 모달 UI 신규 구현 | 낮 | 기존 모달 없어서 새로 만듦 | Tailwind + fixed overlay로 간단 구현 |
+| 인라인 덮어쓰기 다이얼로그 | 낮 | — | 갤러리 모달 내부 상태로 처리 |
 | page.tsx 연결 | 낮 | 로컬 state라 props 전달만으로 충분 | — |
-| 덮어쓰기 확인 | 낮 | — | window.confirm 또는 인라인 다이얼로그 |
 | 100vh 레이아웃 | 없음 | 모달은 fixed overlay라 레이아웃 무관 | — |
 | ESC 키 충돌 | 낮 | 에디터 ESC와 모달 ESC 충돌 가능 | 모달 열림 시 에디터 포커스 해제 |
 
