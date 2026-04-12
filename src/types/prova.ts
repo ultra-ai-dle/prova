@@ -98,7 +98,7 @@ export interface AnalyzeMetadata {
   /** 상단 요약 줄에 표시할 스칼라 변수명 (예: sum_v, total) */
   linear_context_var_names?: string[];
   /** AI가 판단한 변수별 특수 자료구조 시각화 종류 (변수명 → 뷰 종류) */
-  special_var_kinds?: Record<string, "HEAP" | "QUEUE" | "STACK" | "DEQUE" | "UNIONFIND" | "VISITED" | "DISTANCE" | "PARENT_TREE">;
+  special_var_kinds?: Record<string, "HEAP" | "QUEUE" | "STACK" | "DEQUE" | "UNIONFIND" | "VISITED" | "DISTANCE" | "PARENT_TREE" | "BINARY_TREE" | "SEGMENT_TREE">;
 }
 
 export interface WorkerDonePayload {
@@ -153,5 +153,7 @@ export type AnalyzeAiResponse = {
     | "VISITED"
     | "DISTANCE"
     | "PARENT_TREE"
+    | "BINARY_TREE"
+    | "SEGMENT_TREE"
   >;
 };

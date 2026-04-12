@@ -204,37 +204,49 @@ function instrumentCode(code, symbols) {
     return "; __snap(" + line + ", " + captureFunc + "); ";
   }
 
-  function visitStatements(body) {
+  // inFuncName: 현재 순회 중인 함수명 (null이면 global scope)
+  function visitStatements(body, inFuncName) {
     for (const stmt of body) {
       if (!stmt || !stmt.loc) continue;
 
       const line = stmt.loc.start.line;
       const endOffset = stmt.end;
 
-      // return/break/continue/throw 는 뒤에 삽입하면 unreachable → 앞에 삽입
       const isExit = stmt.type === "ReturnStatement"
         || stmt.type === "ThrowStatement"
         || stmt.type === "BreakStatement"
         || stmt.type === "ContinueStatement";
 
       if (isExit) {
-        insertions.push({ offset: stmt.start, text: "__snap(" + line + ", " + captureFunc + "); " });
+        if (stmt.type === "ReturnStatement" && inFuncName !== null) {
+          // return expr → __snapReturn(funcName, line, captureFunc, expr); return expr;
+          const retExpr = stmt.argument
+            ? code.slice(stmt.argument.start, stmt.argument.end)
+            : "undefined";
+          insertions.push({
+            offset: stmt.start,
+            text: "{ var __rv = (" + retExpr + "); __snapReturn(" + JSON.stringify(inFuncName) + ", " + line + ", " + captureFunc + ", __rv); return __rv; } if(false) "
+          });
+        } else {
+          insertions.push({ offset: stmt.start, text: "__snap(" + line + ", " + captureFunc + "); " });
+        }
       } else {
         insertions.push({ offset: endOffset, text: snapText(line) });
-        visitNode(stmt);
+        visitNode(stmt, null, inFuncName);
       }
     }
   }
 
-  function visitNode(node) {
+  // parentNode: 함수명 추론용, inFuncName: 현재 속한 함수명
+  function visitNode(node, parentNode, inFuncName) {
     if (!node || typeof node !== "object") return;
     if (node.type === "BlockStatement") {
-      visitStatements(node.body);
+      visitStatements(node.body, inFuncName);
       return;
     }
     if (node.type === "IfStatement") {
-      visitNode(node.consequent);
-      if (node.alternate) visitNode(node.alternate);
+      visitNode(node.consequent, null, inFuncName);
+      if (node.alternate) visitNode(node.alternate, null, inFuncName);
       return;
     }
     if (
@@ -244,7 +256,7 @@ function instrumentCode(code, symbols) {
       node.type === "WhileStatement" ||
       node.type === "DoWhileStatement"
     ) {
-      visitNode(node.body);
+      visitNode(node.body, null, inFuncName);
       return;
     }
     if (
@@ -252,28 +264,98 @@ function instrumentCode(code, symbols) {
       node.type === "FunctionExpression" ||
       node.type === "ArrowFunctionExpression"
     ) {
-      if (node.body && node.body.type === "BlockStatement") visitNode(node.body);
+      if (node.body && node.body.type === "BlockStatement") {
+        // 함수명 결정: declaration id > expression id > 부모 맥락 > anonymous
+        var funcName = "anonymous";
+        if (node.id && node.id.name) {
+          funcName = node.id.name;
+        } else if (
+          parentNode &&
+          parentNode.type === "VariableDeclarator" &&
+          parentNode.id &&
+          parentNode.id.type === "Identifier"
+        ) {
+          funcName = parentNode.id.name;
+        } else if (
+          parentNode &&
+          parentNode.type === "AssignmentExpression" &&
+          parentNode.left &&
+          parentNode.left.type === "Identifier"
+        ) {
+          funcName = parentNode.left.name;
+        } else if (
+          parentNode &&
+          parentNode.type === "Property" &&
+          parentNode.key &&
+          parentNode.key.type === "Identifier"
+        ) {
+          funcName = parentNode.key.name;
+        }
+        var callLine = node.body.loc ? node.body.loc.start.line : 0;
+        insertions.push({
+          offset: node.body.start + 1,
+          text: " __snapCall(" + JSON.stringify(funcName) + ", " + callLine + ", " + captureFunc + "); "
+        });
+        // 바디 내부 순회 — inFuncName을 이 함수명으로 교체
+        visitStatements(node.body.body, funcName);
+        // 암묵적 return: 바디 끝에 __snapReturn 삽입
+        insertions.push({
+          offset: node.body.end - 1,
+          text: " __snapReturn(" + JSON.stringify(funcName) + ", " + node.body.loc.end.line + ", " + captureFunc + ", undefined); "
+        });
+      }
       return;
     }
     if (node.type === "TryStatement") {
-      visitNode(node.block);
-      if (node.handler) visitNode(node.handler.body);
-      if (node.finalizer) visitNode(node.finalizer);
+      visitNode(node.block, null, inFuncName);
+      if (node.handler) visitNode(node.handler.body, null, inFuncName);
+      if (node.finalizer) visitNode(node.finalizer, null, inFuncName);
       return;
     }
     if (node.type === "SwitchStatement") {
       for (const sc of node.cases) {
-        visitStatements(sc.consequent);
+        visitStatements(sc.consequent, inFuncName);
       }
       return;
     }
     if (node.type === "LabeledStatement") {
-      visitNode(node.body);
+      visitNode(node.body, null, inFuncName);
+      return;
+    }
+    if (node.type === "VariableDeclaration") {
+      for (const decl of node.declarations) {
+        if (decl.init) visitNode(decl.init, decl, inFuncName);
+      }
+      return;
+    }
+    if (node.type === "AssignmentExpression") {
+      visitNode(node.right, node, inFuncName);
       return;
     }
   }
 
-  visitStatements(ast.body);
+  // top-level: FunctionDeclaration은 __snap 삽입 없이 내부만 순회
+  function visitTopLevel(body) {
+    for (const stmt of body) {
+      if (!stmt || !stmt.loc) continue;
+      const line = stmt.loc.start.line;
+      const endOffset = stmt.end;
+      const isExit = stmt.type === "ReturnStatement"
+        || stmt.type === "ThrowStatement"
+        || stmt.type === "BreakStatement"
+        || stmt.type === "ContinueStatement";
+      if (isExit) {
+        insertions.push({ offset: stmt.start, text: "__snap(" + line + ", " + captureFunc + "); " });
+      } else if (stmt.type === "FunctionDeclaration") {
+        visitNode(stmt, null, null);
+      } else {
+        insertions.push({ offset: endOffset, text: snapText(line) });
+        visitNode(stmt, null, null);
+      }
+    }
+  }
+
+  visitTopLevel(ast.body);
 
   // 역순 삽입 (앞쪽 오프셋이 밀리지 않도록)
   insertions.sort(function(a, b) { return b.offset - a.offset; });
@@ -321,34 +403,73 @@ function executeInSandbox(instrumentedCode, stdin, limits) {
   });
   step = 1;
 
-  function __snap(line, captureThunk) {
-    if (truncated) return;
-    if (step >= maxSteps) {
-      truncated = true;
-      return;
-    }
+  // 콜스택: { func, depth } — push on call, pop on return
+  const callStack = [];
+
+  function currentScope() {
+    return callStack.length > 0
+      ? callStack[callStack.length - 1]
+      : { func: "<global>", depth: 1 };
+  }
+
+  function captureVars(captureThunk) {
     let rawVars = {};
-    try {
-      rawVars = captureThunk();
-    } catch (e) {
-      // 캡처 실패는 무시 — 빈 vars로 스텝 기록
-    }
+    try { rawVars = captureThunk(); } catch (e) { /* 캡처 실패 무시 */ }
     const vars = {};
     for (const [k, v] of Object.entries(rawVars)) {
-      if (v === undefined) continue;         // 아직 선언 전인 변수 (TDZ) 제외
-      if (typeof v === "function") continue; // 함수 객체 제외
+      if (v === undefined) continue;
+      if (typeof v === "function") continue;
       vars[k] = _safeJs(v, 0, safeL0, safeLN);
     }
+    return vars;
+  }
+
+  function __snap(line, captureThunk) {
+    if (truncated) return;
+    if (step >= maxSteps) { truncated = true; return; }
     trace.push({
-      step: step,
+      step: step++,
       line: line,
-      vars: vars,
-      scope: { func: "<global>", depth: 1 },
-      parent_frames: [],
+      event: "line",
+      vars: captureVars(captureThunk),
+      scope: currentScope(),
+      parent_frames: callStack.slice(0, -1),
       stdout: stdoutLines.slice(),
       runtimeError: null
     });
-    step++;
+  }
+
+  function __snapCall(funcName, line, captureThunk) {
+    if (truncated) return;
+    if (step >= maxSteps) { truncated = true; return; }
+    callStack.push({ func: funcName, depth: callStack.length + 2 });
+    trace.push({
+      step: step++,
+      line: line,
+      event: "call",
+      vars: captureVars(captureThunk),
+      scope: currentScope(),
+      parent_frames: callStack.slice(0, -1),
+      stdout: stdoutLines.slice(),
+      runtimeError: null
+    });
+  }
+
+  function __snapReturn(funcName, line, captureThunk, returnValue) {
+    if (truncated) return;
+    const scope = currentScope();
+    trace.push({
+      step: step++,
+      line: line,
+      event: "return",
+      vars: captureVars(captureThunk),
+      scope: scope,
+      parent_frames: callStack.slice(0, -1),
+      stdout: stdoutLines.slice(),
+      runtimeError: null,
+      returnValue: returnValue
+    });
+    if (callStack.length > 0) callStack.pop();
   }
 
   // console.log 리다이렉트
@@ -397,8 +518,8 @@ function executeInSandbox(instrumentedCode, stdin, limits) {
     // new Function으로 격리된 컨텍스트에서 실행
     // __snap, console, readline, require 를 외부에서 주입
     // eslint-disable-next-line no-new-func
-    const fn = new Function("__snap", "console", "readline", "require", instrumentedCode);
-    fn(__snap, fakeConsole, fakeReadline, fakeRequire);
+    const fn = new Function("__snap", "__snapCall", "__snapReturn", "console", "readline", "require", instrumentedCode);
+    fn(__snap, __snapCall, __snapReturn, fakeConsole, fakeReadline, fakeRequire);
 
     // 실행 완료 — 최종 상태 추가
     const lastStep = trace[trace.length - 1];
@@ -417,11 +538,12 @@ function executeInSandbox(instrumentedCode, stdin, limits) {
       runtimeError: null
     });
   } catch (err) {
-    const lineNo = extractErrorLine(err) || 0;
+    const lastStep = trace[trace.length - 1];
+    const lineNo = lastStep ? lastStep.line : (extractErrorLine(err) || 0);
     trace.push({
       step: step,
       line: lineNo,
-      vars: {},
+      vars: lastStep ? Object.assign({}, lastStep.vars) : {},
       scope: { func: "<global>", depth: 1 },
       parent_frames: [],
       stdout: stdoutLines.slice(),

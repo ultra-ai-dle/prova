@@ -146,7 +146,7 @@ async function annotateBatch(
   const prompt = buildPrompt(slim, ctx);
 
   try {
-    const raw = await callWithFallback(prompt, chain);
+    const raw = await callWithFallback(prompt, chain, { maxOutputTokens: 4096 });
     const parsed = parseAnnotatedSteps(raw, batch.length);
     if (parsed) return parsed;
   } catch {

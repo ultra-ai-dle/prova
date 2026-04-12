@@ -124,7 +124,9 @@ export function normalizeResponse(
     | "UNIONFIND"
     | "VISITED"
     | "DISTANCE"
-    | "PARENT_TREE";
+    | "PARENT_TREE"
+    | "BINARY_TREE"
+    | "SEGMENT_TREE";
   const validSpecialKinds = new Set<SpecialKind>([
     "HEAP",
     "QUEUE",
@@ -134,6 +136,8 @@ export function normalizeResponse(
     "VISITED",
     "DISTANCE",
     "PARENT_TREE",
+    "BINARY_TREE",
+    "SEGMENT_TREE",
   ]);
   const specialVarKinds: Record<string, SpecialKind> = {};
   if (

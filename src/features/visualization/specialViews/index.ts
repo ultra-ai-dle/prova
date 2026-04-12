@@ -6,4 +6,6 @@ export { UnionFindView } from "./UnionFindView";
 export { VisitedView } from "./VisitedView";
 export { DistanceView } from "./DistanceView";
 export { ParentTreeView } from "./ParentTreeView";
+export { BinaryTreeView } from "./BinaryTreeView";
+export { SegmentTreeView } from "./SegmentTreeView";
 export type { GraphStepState } from "./types";

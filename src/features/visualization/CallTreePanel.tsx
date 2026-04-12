@@ -78,9 +78,8 @@ export function CallTreePanel({ traceSteps, currentStep, onJumpToStep }: Props) 
     activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [activeNode?.id]);
 
-  if (callTree.roots.length === 0) return null;
-
-  const totalCalls = countNodes(callTree.roots);
+  const isEmpty = callTree.roots.length === 0;
+  const totalCalls = isEmpty ? 0 : countNodes(callTree.roots);
 
   return (
     <div className="h-full flex flex-col bg-[#0b1119] select-none">
@@ -89,11 +88,20 @@ export function CallTreePanel({ traceSteps, currentStep, onJumpToStep }: Props) 
         <span className="text-[10px] text-prova-muted uppercase tracking-widest font-mono">
           Call Tree
         </span>
-        <span className="text-[10px] text-prova-muted font-mono">{totalCalls} calls</span>
+        {!isEmpty && (
+          <span className="text-[10px] text-prova-muted font-mono">{totalCalls} calls</span>
+        )}
       </div>
+      {isEmpty && (
+        <div className="flex-1 flex items-center justify-center px-4">
+          <p className="text-[11px] text-prova-muted text-center leading-relaxed">
+            함수 호출 없음
+          </p>
+        </div>
+      )}
 
       {/* Tree list */}
-      <div className="flex-1 overflow-auto prova-scrollbar py-1">
+      {!isEmpty && <div className="flex-1 overflow-auto prova-scrollbar py-1">
         {flatNodes.map(({ node, prefix }) => {
           const isActive = activeNode?.id === node.id;
           const isOnPath = activePath.has(node.id);
@@ -198,7 +206,7 @@ export function CallTreePanel({ traceSteps, currentStep, onJumpToStep }: Props) 
             </div>
           );
         })}
-      </div>
+      </div>}
 
       {/* Active call stack summary */}
       {activeNode && (

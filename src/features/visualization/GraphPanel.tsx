@@ -46,6 +46,8 @@ import {
   VisitedView,
   DistanceView,
   ParentTreeView,
+  BinaryTreeView,
+  SegmentTreeView,
   type GraphStepState,
 } from "./specialViews";
 import {
@@ -66,7 +68,121 @@ import {
   topologySignature,
 } from "./graphHelpers";
 
-type SpecialKind = "HEAP" | "QUEUE" | "STACK" | "DEQUE" | "UNIONFIND" | "VISITED" | "DISTANCE" | "PARENT_TREE";
+type SpecialKind = "HEAP" | "QUEUE" | "STACK" | "DEQUE" | "UNIONFIND" | "VISITED" | "DISTANCE" | "PARENT_TREE" | "BINARY_TREE" | "SEGMENT_TREE";
+
+/** 그래프가 구조적으로 트리인지 판별.
+ *  다양한 케이스 처리:
+ *  - 양방향 중복 엣지 (undirected: 각 엣지가 s→t, t→s 두 번 추가된 경우)
+ *  - 방향 트리 (parent→child 방향만, 엣지 N-1개)
+ *  - 1-indexed (노드 "0"이 실제 연결 없는 더미인 경우)
+ */
+function isStructuralTree(graph: { nodes: GraphNode[]; links: GraphLink[] }): boolean {
+  if (graph.nodes.length === 0) return false;
+  if (graph.nodes.length === 1) return true;
+
+  // 무방향 유니크 엣지 집합 (s < t 기준으로 정규화하여 중복 제거)
+  const undirectedEdges = new Set<string>();
+  for (const l of graph.links) {
+    const s = String(l.source), t = String(l.target);
+    if (s === t) return false; // 셀프 루프 → 트리 아님
+    undirectedEdges.add(s < t ? `${s}\0${t}` : `${t}\0${s}`);
+  }
+
+  // 실제로 연결된 노드만 (degree > 0) 집계 — 1-indexed에서 더미 노드 0 제외
+  const connectedNodes = new Set<string>();
+  for (const l of graph.links) {
+    connectedNodes.add(String(l.source));
+    connectedNodes.add(String(l.target));
+  }
+  const N = connectedNodes.size;
+  if (N < 2) return false;
+  if (undirectedEdges.size !== N - 1) return false;
+
+  // BFS 연결성: 연결된 노드들이 모두 하나의 컴포넌트인지 확인
+  const adj = new Map<string, string[]>();
+  for (const n of connectedNodes) adj.set(n, []);
+  for (const l of graph.links) {
+    const s = String(l.source), t = String(l.target);
+    adj.get(s)?.push(t);
+    adj.get(t)?.push(s);
+  }
+  const startId = [...connectedNodes][0];
+  const visited = new Set<string>([startId]);
+  const queue: string[] = [startId];
+  while (queue.length > 0) {
+    for (const nb of adj.get(queue.shift()!)!) {
+      if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }
+    }
+  }
+  return visited.size === N;
+}
+
+/** BFS depth + subtree-width 기반 계층형 레이아웃 */
+function computeTreeLayout(
+  graph: { nodes: GraphNode[]; links: GraphLink[] },
+  width: number,
+  height: number,
+): Map<string, { x: number; y: number }> {
+  const adj = new Map<string, string[]>();
+  for (const n of graph.nodes) adj.set(n.id, []);
+  for (const l of graph.links) {
+    const s = String(l.source), t = String(l.target);
+    adj.get(s)?.push(t);
+    adj.get(t)?.push(s);
+  }
+  // 실제 연결된 노드만 사용 (1-indexed 더미 노드 0 제외)
+  const connectedNodes = new Set<string>();
+  for (const l of graph.links) {
+    connectedNodes.add(String(l.source));
+    connectedNodes.add(String(l.target));
+  }
+
+  // 루트: degree가 가장 높은 노드 (없으면 첫 노드)
+  const rootId = [...adj.entries()]
+    .filter(([id]) => connectedNodes.has(id))
+    .sort((a, b) => b[1].length - a[1].length)[0]?.[0] ?? graph.nodes[0].id;
+
+  type TNode = { id: string; children: string[]; depth: number };
+  const tNodes = new Map<string, TNode>();
+  for (const n of graph.nodes) tNodes.set(n.id, { id: n.id, children: [], depth: 0 });
+
+  const visited = new Set<string>([rootId]);
+  const bfsQ: string[] = [rootId];
+  while (bfsQ.length > 0) {
+    const cur = bfsQ.shift()!;
+    for (const nb of adj.get(cur) ?? []) {
+      if (!visited.has(nb)) {
+        visited.add(nb);
+        tNodes.get(nb)!.depth = tNodes.get(cur)!.depth + 1;
+        tNodes.get(cur)!.children.push(nb);
+        bfsQ.push(nb);
+      }
+    }
+  }
+
+  const maxDepth = Math.max(...[...tNodes.values()].map((n) => n.depth));
+  const V_GAP = Math.min(80, (height - 60) / Math.max(maxDepth, 1));
+
+  function leafCount(id: string): number {
+    const ch = tNodes.get(id)!.children;
+    return ch.length === 0 ? 1 : ch.reduce((s, c) => s + leafCount(c), 0);
+  }
+
+  const positions = new Map<string, { x: number; y: number }>();
+  function assignX(id: string, left: number, right: number) {
+    positions.set(id, { x: (left + right) / 2, y: tNodes.get(id)!.depth * V_GAP + 40 });
+    const children = tNodes.get(id)!.children;
+    const total = leafCount(id);
+    let cur = left;
+    for (const child of children) {
+      const share = ((right - left) * leafCount(child)) / total;
+      assignX(child, cur, cur + share);
+      cur += share;
+    }
+  }
+  assignX(rootId, 20, width - 20);
+  return positions;
+}
 
 type Props = {
   step: MergedTraceStep | null;
@@ -81,6 +197,8 @@ type Props = {
   linearContextVarNames?: string[];
   /** AI가 판단한 변수별 특수 자료구조 뷰 종류 */
   specialVarKinds?: Record<string, SpecialKind>;
+  /** AI 분류가 트리 알고리즘임을 나타내는 힌트 (tags/detected_algorithms 기반) */
+  isTreeHint?: boolean;
   playbackControls?: {
     isPlaying: boolean;
     currentStep: number;
@@ -219,13 +337,15 @@ function GraphCanvas({
   graph,
   graphMode,
   positionRef,
-  stepState
+  stepState,
+  useTreeLayout = false,
 }: {
   graphKey: string;
   graph: { nodes: GraphNode[]; links: GraphLink[] };
   graphMode: "directed" | "undirected";
   positionRef: React.MutableRefObject<Map<string, { x: number; y: number; vx?: number; vy?: number }>>;
   stepState: GraphStepState;
+  useTreeLayout?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -233,7 +353,75 @@ function GraphCanvas({
   const simRef = useRef<d3.Simulation<SimNode, undefined> | null>(null);
   const graphSignature = useMemo(() => topologySignature(graph), [graph]);
 
+  // ── Tree layout (static, no D3 force) ───────────────────────────────────────
   useEffect(() => {
+    if (!useTreeLayout) return;
+    const svgEl = svgRef.current;
+    const wrap = wrapRef.current;
+    if (!svgEl || !wrap) return;
+
+    const svg = d3.select(svgEl);
+    svg.selectAll("*").remove();
+    if (graph.nodes.length === 0) return;
+
+    const width = Math.max(wrap.clientWidth, 260);
+    const height = Math.max(320, Math.round(Math.max(wrap.clientHeight, 220) * 0.62));
+    svg.attr("viewBox", `0 0 ${width} ${height}`).style("overflow", "visible");
+
+    const positions = computeTreeLayout(graph, width, height);
+    const arrowId = `graph-arrow-tree-${svgSafeId(graphKey)}`;
+    const root = svg.append("g");
+    const zoomBehavior = d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.3, 3]).on("zoom", (e) => {
+      root.attr("transform", e.transform);
+    });
+    svg.call(zoomBehavior);
+
+    const defs = svg.append("defs");
+    defs.append("marker").attr("id", arrowId)
+      .attr("viewBox", "0 0 10 10").attr("markerWidth", 10).attr("markerHeight", 10)
+      .attr("markerUnits", "userSpaceOnUse").attr("refX", 9).attr("refY", 5).attr("orient", "auto")
+      .append("path").attr("d", "M0,0 L10,5 L0,10 z").attr("fill", "#a8cfff");
+
+    // edges
+    root.append("g").selectAll("line").data(graph.links).join("line")
+      .attr("x1", (d) => positions.get(String(d.source))?.x ?? 0)
+      .attr("y1", (d) => positions.get(String(d.source))?.y ?? 0)
+      .attr("x2", (d) => positions.get(String(d.target))?.x ?? 0)
+      .attr("y2", (d) => positions.get(String(d.target))?.y ?? 0)
+      .attr("stroke", (d) => linkStyleForStep(stepState, String(d.source), String(d.target)).stroke)
+      .attr("stroke-width", (d) => linkStyleForStep(stepState, String(d.source), String(d.target)).width)
+      .attr("stroke-opacity", (d) => linkStyleForStep(stepState, String(d.source), String(d.target)).opacity)
+      .attr("marker-end", graphMode === "directed" ? `url(#${arrowId})` : null);
+
+    // edge weight labels
+    root.append("g").selectAll("text").data(graph.links.filter((l) => !!l.weight)).join("text")
+      .attr("x", (d) => ((positions.get(String(d.source))?.x ?? 0) + (positions.get(String(d.target))?.x ?? 0)) / 2)
+      .attr("y", (d) => ((positions.get(String(d.source))?.y ?? 0) + (positions.get(String(d.target))?.y ?? 0)) / 2 - 8)
+      .attr("fill", "#f2cc60").attr("font-size", 11).attr("font-weight", 700)
+      .attr("text-anchor", "middle").attr("dominant-baseline", "central")
+      .attr("paint-order", "stroke").attr("stroke", "#0b1119").attr("stroke-width", 3.2)
+      .text((d) => d.weight ?? "");
+
+    // nodes
+    const nodeSel = root.append("g").selectAll<SVGGElement, GraphNode>("g")
+      .data(graph.nodes).join("g")
+      .attr("transform", (d) => {
+        const p = positions.get(d.id);
+        return `translate(${p?.x ?? 0},${p?.y ?? 0})`;
+      });
+    nodeSel.append("circle").attr("r", GRAPH_NODE_R)
+      .attr("fill", (d) => nodePalette(stepState, d.id).fill)
+      .attr("stroke", (d) => nodePalette(stepState, d.id).stroke)
+      .attr("stroke-width", (d) => nodePalette(stepState, d.id).sw);
+    nodeSel.append("text")
+      .attr("text-anchor", "middle").attr("dominant-baseline", "middle")
+      .attr("fill", "#e6edf3").attr("font-size", 11).attr("font-weight", 700)
+      .text((d) => d.label);
+  }, [useTreeLayout, graphKey, graphMode, graphSignature, graph, stepState]);
+
+  // ── D3 Force layout ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (useTreeLayout) return;
     const svgEl = svgRef.current;
     const wrap = wrapRef.current;
     if (!svgEl || !wrap) return;
@@ -455,9 +643,10 @@ function GraphCanvas({
       sim.stop();
       if (simRef.current === sim) simRef.current = null;
     };
-  }, [graphKey, graphMode, positionRef, graphSignature]);
+  }, [useTreeLayout, graphKey, graphMode, positionRef, graphSignature]);
 
   useEffect(() => {
+    if (useTreeLayout) return; // 트리 레이아웃은 위 useEffect에서 stepState 포함해 전체 재렌더
     const svgEl = svgRef.current;
     if (!svgEl) return;
     const svg = d3.select(svgEl);
@@ -523,11 +712,13 @@ export function GraphPanel({
   linearPivots,
   linearContextVarNames,
   specialVarKinds: specialVarKindsProp,
+  isTreeHint = false,
   playbackControls
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const positionRef = useRef<Map<string, { x: number; y: number; vx?: number; vy?: number }>>(new Map());
   const [array2DModeByVar, setArray2DModeByVar] = useState<Record<string, "GRID" | "GRAPH">>({});
+  const [treeLayoutByVar, setTreeLayoutByVar] = useState<Record<string, boolean>>({});
   const stepState = useMemo(() => deriveGraphStepState(step?.vars ?? {}), [step]);
   // specialVarKindsProp이 undefined일 때 매 렌더마다 새 {}를 만들지 않도록 안정화
   const specialVarKinds = specialVarKindsProp ?? EMPTY_SPECIAL_VAR_KINDS;
@@ -571,7 +762,7 @@ export function GraphPanel({
       if (isDirectionMapLike(name, value)) return;
       if (isClearlyGridLike(value)) return;
       if (looksLike2DScalarTableGrid(value)) return;
-      if (detectGraphLike(value) && /graph|adj|edge|matrix/i.test(name)) {
+      if (detectGraphLike(value) && /graph|adj|edge|matrix|tree/i.test(name)) {
         graphKeys.add(name);
       }
     });
@@ -669,7 +860,7 @@ export function GraphPanel({
         {/* Structure regions */}
         <div className="space-y-2">
           {parsed.structures.map((structure) => {
-            const SPECIAL_KINDS: ReadonlySet<string> = new Set(["HEAP","QUEUE","STACK","DEQUE","UNIONFIND","VISITED","DISTANCE","PARENT_TREE"]);
+            const SPECIAL_KINDS: ReadonlySet<string> = new Set(["HEAP","QUEUE","STACK","DEQUE","UNIONFIND","VISITED","DISTANCE","PARENT_TREE","BINARY_TREE","SEGMENT_TREE"]);
             const isSpecial = SPECIAL_KINDS.has(structure.kind);
             const promoted3D =
               bitmaskMode && is2DBitmaskGrid(structure.value)
@@ -688,8 +879,10 @@ export function GraphPanel({
               looksLike2DScalarTableGrid(structure.value) ||
               isClearlyGridLike(structure.value) ||
               is2DRectangularCellGrid(structure.value);
+            // isTreeHint일 때는 변수명 무관하게 GRAPHLIKE → GRAPH 기본값
             const default2dMode =
-              parsed.graphKeys.has(structure.key) && !preferGridDefault ? "GRAPH" : "GRID";
+              (parsed.graphKeys.has(structure.key) || (isTreeHint && structure.kind === "GRAPHLIKE"))
+              && !preferGridDefault ? "GRAPH" : "GRID";
             const resolvedMode = lockGridOnly
               ? "GRID"
               : !canToggleGraphGrid && structure.kind === "GRAPHLIKE"
@@ -699,8 +892,16 @@ export function GraphPanel({
             const SPECIAL_BADGE_MAP: Partial<Record<string, string>> = {
               HEAP: "HEAP", QUEUE: "QUEUE", STACK: "STACK", DEQUE: "DEQUE",
               UNIONFIND: "UNION-FIND", VISITED: "VISITED", DISTANCE: "DIST", PARENT_TREE: "TREE",
+              BINARY_TREE: "BIN-TREE", SEGMENT_TREE: "SEG-TREE",
             };
             const specialBadge = SPECIAL_BADGE_MAP[structure.kind] ?? null;
+
+            const graphForThisKey = structure.graph ?? { nodes: [], links: [] };
+            const structurallyTree = isStructuralTree(graphForThisKey);
+            // GRAPHLIKE면 항상 토글 노출. 기본값: 구조적 트리 + AI 트리 힌트면 TREE, 아니면 FORCE
+            const canToggleTreeLayout = resolvedMode === "GRAPH" && !isSpecial;
+            const defaultTreeLayout = structurallyTree && isTreeHint;
+            const useTreeLayout = canToggleTreeLayout && (treeLayoutByVar[structure.key] ?? defaultTreeLayout);
 
             return (
             <div key={structure.key} className="rounded border border-prova-line bg-[#0f141a] p-2">
@@ -713,22 +914,40 @@ export function GraphPanel({
                     </span>
                   )}
                 </div>
-                {canToggleGraphGrid && (
-                  <div className="inline-flex items-center rounded border border-prova-line overflow-hidden text-[10px] font-mono">
-                    <button
-                      className={`px-2 py-[2px] ${resolvedMode === "GRID" ? "bg-[#21262d] text-white" : "text-prova-muted hover:text-[#c9d1d9]"}`}
-                      onClick={() => setArray2DModeByVar((prev) => ({ ...prev, [structure.key]: "GRID" }))}
-                    >
-                      GRID
-                    </button>
-                    <button
-                      className={`px-2 py-[2px] border-l border-prova-line ${resolvedMode === "GRAPH" ? "bg-[#21262d] text-white" : "text-prova-muted hover:text-[#c9d1d9]"}`}
-                      onClick={() => setArray2DModeByVar((prev) => ({ ...prev, [structure.key]: "GRAPH" }))}
-                    >
-                      GRAPH
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-1">
+                  {canToggleTreeLayout && (
+                    <div className="inline-flex items-center rounded border border-prova-line overflow-hidden text-[10px] font-mono">
+                      <button
+                        className={`px-2 py-[2px] ${useTreeLayout ? "bg-[#21262d] text-white" : "text-prova-muted hover:text-[#c9d1d9]"}`}
+                        onClick={() => setTreeLayoutByVar((prev) => ({ ...prev, [structure.key]: true }))}
+                      >
+                        TREE
+                      </button>
+                      <button
+                        className={`px-2 py-[2px] border-l border-prova-line ${!useTreeLayout ? "bg-[#21262d] text-white" : "text-prova-muted hover:text-[#c9d1d9]"}`}
+                        onClick={() => setTreeLayoutByVar((prev) => ({ ...prev, [structure.key]: false }))}
+                      >
+                        FORCE
+                      </button>
+                    </div>
+                  )}
+                  {canToggleGraphGrid && (
+                    <div className="inline-flex items-center rounded border border-prova-line overflow-hidden text-[10px] font-mono">
+                      <button
+                        className={`px-2 py-[2px] ${resolvedMode === "GRID" ? "bg-[#21262d] text-white" : "text-prova-muted hover:text-[#c9d1d9]"}`}
+                        onClick={() => setArray2DModeByVar((prev) => ({ ...prev, [structure.key]: "GRID" }))}
+                      >
+                        GRID
+                      </button>
+                      <button
+                        className={`px-2 py-[2px] border-l border-prova-line ${resolvedMode === "GRAPH" ? "bg-[#21262d] text-white" : "text-prova-muted hover:text-[#c9d1d9]"}`}
+                        onClick={() => setArray2DModeByVar((prev) => ({ ...prev, [structure.key]: "GRAPH" }))}
+                      >
+                        GRAPH
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               {structure.kind === "HEAP" ? (
                 <HeapTreeView
@@ -751,13 +970,28 @@ export function GraphPanel({
                 <DistanceView arr={structure.value as unknown[]} bitmaskMode={bitmaskMode} bitWidth={bitWidth} />
               ) : structure.kind === "PARENT_TREE" ? (
                 <ParentTreeView arr={structure.value as unknown[]} stepState={stepState} />
+              ) : structure.kind === "BINARY_TREE" ? (
+                <BinaryTreeView
+                  arr={structure.value as unknown[]}
+                  stepState={stepState}
+                  bitmaskMode={bitmaskMode}
+                  bitWidth={bitWidth}
+                />
+              ) : structure.kind === "SEGMENT_TREE" ? (
+                <SegmentTreeView
+                  arr={structure.value as unknown[]}
+                  stepState={stepState}
+                  bitmaskMode={bitmaskMode}
+                  bitWidth={bitWidth}
+                />
               ) : (structure.kind === "ARRAY2D" || structure.kind === "GRAPHLIKE") && resolvedMode === "GRAPH" ? (
                 <GraphCanvas
                   graphKey={structure.key}
-                  graph={structure.graph ?? { nodes: [], links: [] }}
+                  graph={graphForThisKey}
                   graphMode={graphMode}
                   positionRef={positionRef}
                   stepState={stepState}
+                  useTreeLayout={useTreeLayout}
                 />
               ) : (structure.kind === "ARRAY2D" || structure.kind === "GRAPHLIKE") ? (
                 <div className="overflow-auto">

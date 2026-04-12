@@ -57,8 +57,11 @@ export function DebugCodeEditor({
     >
       {code.split("\n").map((line, index) => {
         const lineNo = index + 1;
-        const active = currentStep?.line === lineNo;
-        const error = active && currentStep?.runtimeError;
+        const errorLine = currentStep?.runtimeError
+          ? (currentStep.runtimeError.line ?? currentStep.line)
+          : null;
+        const error = errorLine !== null && errorLine === lineNo;
+        const active = !error && currentStep?.line === lineNo;
         const executed = lineStepMap.has(lineNo);
         const hitInfo = executed ? getLineHitInfo(lineNo) : null;
 

@@ -11,7 +11,14 @@ import { resolveGraphMode } from "@/lib/graphModeInference";
 import { normalizeAndDedupeTags } from "@/lib/tagNormalize";
 import { GuidedTour } from "@/features/tour/GuidedTour";
 import { useTourStore } from "@/features/tour/useTourStore";
-import { IconFiles, IconSettings, IconRefresh, IconExpand, IconWarning, IconPencil } from "@/components/icons";
+import {
+  IconFiles,
+  IconSettings,
+  IconRefresh,
+  IconExpand,
+  IconWarning,
+  IconPencil,
+} from "@/components/icons";
 import { detectLanguageFromCode } from "@/lib/languageDetection";
 import {
   lang,
@@ -24,7 +31,11 @@ import {
   highlightPythonLine,
 } from "@/lib/syntaxHighlight";
 import { maxNumericAbs, formatWithBitMode } from "@/lib/formatValue";
-import { lineFromOffset, detectIndentSize, convertIndent } from "@/lib/textUtils";
+import {
+  lineFromOffset,
+  detectIndentSize,
+  convertIndent,
+} from "@/lib/textUtils";
 import { useKeyboardNavigation } from "@/hooks/useKeyboardNavigation";
 import { usePlaybackTimer } from "@/hooks/usePlaybackTimer";
 import { useDragResize } from "@/hooks/useDragResize";
@@ -92,7 +103,12 @@ export default function Page() {
     callTreeDragAnchorRef,
     CALLTREE_MIN,
     CALLTREE_MAX,
-  } = useDragResize({ setPaneWidths, setRightHeights, setCallTreeWidth, setCallTreeOpen });
+  } = useDragResize({
+    setPaneWidths,
+    setRightHeights,
+    setCallTreeWidth,
+    setCallTreeOpen,
+  });
 
   const {
     pyodideStatus,
@@ -113,7 +129,6 @@ export default function Page() {
     setPlaying,
     setSpeed,
     resetForRun,
-    setAnnotated,
   } = useProvaStore();
 
   const currentStep = mergedTrace[playback.currentStep] ?? null;
@@ -173,9 +188,11 @@ export default function Page() {
     if (hasGraphTag) return "GRAPH" as const;
     return metadata.strategy;
   }, [metadata, displayTags]);
-  const isRecursive = useMemo(() => {
-    if (mergedTrace.length === 0) return false;
+  const { isRecursive, hasCallTree } = useMemo(() => {
+    if (mergedTrace.length === 0)
+      return { isRecursive: false, hasCallTree: false };
     const tree = buildCallTree(mergedTrace);
+    const hasCallTree = tree.roots.length > 0;
     // 재귀 = 동일 함수명이 트리에서 2회 이상 등장하거나, 호출 깊이가 3 이상
     const funcCounts = new Map<string, number>();
     function walk(nodes: typeof tree.roots) {
@@ -188,8 +205,18 @@ export default function Page() {
     const maxCount = Math.max(0, ...funcCounts.values());
     const hasDeepRecursion = [...funcCounts.values()].some((c) => c >= 2);
     const hasDeepDepth = mergedTrace.some((s) => s.scope.depth >= 4);
-    return hasDeepRecursion || maxCount >= 2 || hasDeepDepth;
+    return {
+      isRecursive: hasDeepRecursion || maxCount >= 2 || hasDeepDepth,
+      hasCallTree,
+    };
   }, [mergedTrace]);
+
+  // 새 실행 결과가 나왔을 때 콜트리 가시성 자동 결정:
+  // 콜트리가 있으면 열고, 없으면 닫는다
+  useEffect(() => {
+    if (mergedTrace.length === 0) return;
+    setCallTreeOpen(hasCallTree);
+  }, [mergedTrace, hasCallTree]);
 
   const shouldUseGraphPanel = useMemo(() => {
     if (isAnalyzingCode || !currentStep) return false;
@@ -207,6 +234,16 @@ export default function Page() {
     isAnalyzingCode,
     metadata?.special_var_kinds,
   ]);
+  const isTreeHint = useMemo(() => {
+    if (!metadata) return false;
+    const signals = [
+      ...(metadata.tags ?? []),
+      ...(metadata.detected_algorithms ?? []),
+      metadata.algorithm ?? "",
+    ].map((s) => s.toLowerCase());
+    return signals.some((s) => /(^|[-_\s])tree($|[-_\s])|^tree$|트리/.test(s));
+  }, [metadata]);
+
   const shouldShowBitToggle = useMemo(() => {
     if (!metadata) return false;
     if (metadata.uses_bitmasking) return true;
@@ -329,7 +366,6 @@ export default function Page() {
     setUiMode,
     setGlobalError,
     setCurrentStep,
-    setAnnotated,
     setLanguage,
   });
 
@@ -416,10 +452,13 @@ export default function Page() {
       )}
 
       {/* ── Header ──────────────────────────────────────────── */}
-      <header data-tour="header" className="shrink-0 h-11 bg-[#161b22] border-b border-prova-line flex items-center px-3 gap-4">
+      <header
+        data-tour="header"
+        className="shrink-0 h-11 bg-[#161b22] border-b border-prova-line flex items-center px-3 gap-4"
+      >
         {/* Logo */}
         <div className="font-bold text-[15px] tracking-tight shrink-0">
-          Pro<span className="text-prova-green">va</span>
+          Frog<span className="text-prova-green">ger</span>
         </div>
 
         {/* Status badge — centered */}
@@ -928,6 +967,7 @@ export default function Page() {
                     linearPivots={metadata?.linear_pivots}
                     linearContextVarNames={metadata?.linear_context_var_names}
                     specialVarKinds={metadata?.special_var_kinds}
+                    isTreeHint={isTreeHint}
                     playbackControls={{
                       isPlaying: playback.isPlaying,
                       currentStep: playback.currentStep,
