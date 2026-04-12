@@ -169,9 +169,10 @@ export default function Page() {
     if (hasGraphTag) return "GRAPH" as const;
     return metadata.strategy;
   }, [metadata, displayTags]);
-  const isRecursive = useMemo(() => {
-    if (mergedTrace.length === 0) return false;
+  const { isRecursive, hasCallTree } = useMemo(() => {
+    if (mergedTrace.length === 0) return { isRecursive: false, hasCallTree: false };
     const tree = buildCallTree(mergedTrace);
+    const hasCallTree = tree.roots.length > 0;
     // 재귀 = 동일 함수명이 트리에서 2회 이상 등장하거나, 호출 깊이가 3 이상
     const funcCounts = new Map<string, number>();
     function walk(nodes: typeof tree.roots) {
@@ -184,8 +185,15 @@ export default function Page() {
     const maxCount = Math.max(0, ...funcCounts.values());
     const hasDeepRecursion = [...funcCounts.values()].some((c) => c >= 2);
     const hasDeepDepth = mergedTrace.some((s) => s.scope.depth >= 4);
-    return hasDeepRecursion || maxCount >= 2 || hasDeepDepth;
+    return { isRecursive: hasDeepRecursion || maxCount >= 2 || hasDeepDepth, hasCallTree };
   }, [mergedTrace]);
+
+  // 새 실행 결과가 나왔을 때 콜트리 가시성 자동 결정:
+  // 콜트리가 있으면 열고, 없으면 닫는다
+  useEffect(() => {
+    if (mergedTrace.length === 0) return;
+    setCallTreeOpen(hasCallTree);
+  }, [mergedTrace, hasCallTree]);
 
   const shouldUseGraphPanel = useMemo(() => {
     if (isAnalyzingCode || !currentStep) return false;

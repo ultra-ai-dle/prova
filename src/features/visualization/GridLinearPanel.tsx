@@ -116,15 +116,12 @@ function resolveLinearVar(step: MergedTraceStep, preferredName?: string) {
   return getFirstLinearVar(step);
 }
 
-function toCells(step: MergedTraceStep, grid: unknown[][], previousGrid?: unknown[][] | null) {
+function toCells(_step: MergedTraceStep, grid: unknown[][], previousGrid?: unknown[][] | null) {
   return grid.flatMap((row, y) =>
     row.map((value, x) => {
-      const isCurrent = typeof step.vars.r === "number" && typeof step.vars.c === "number"
-        ? step.vars.r === y && step.vars.c === x
-        : false;
       const prevValue = previousGrid?.[y]?.[x];
       const changed = previousGrid ? JSON.stringify(prevValue) !== JSON.stringify(value) : false;
-      return { value, isCurrent, changed };
+      return { value, isCurrent: false, changed };
     }),
   );
 }
