@@ -464,6 +464,7 @@ export default function Page() {
 
         <button
           className="w-7 h-7 flex items-center justify-center rounded text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors shrink-0"
+          data-tour="gallery"
           aria-label="예제 갤러리"
           title="예제 갤러리"
           onClick={gallery.open}

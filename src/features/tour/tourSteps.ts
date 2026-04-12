@@ -1,6 +1,6 @@
 export interface TourStep {
   targetSelector: string;
-  placement: 'bottom-center' | 'right' | 'bottom-left' | 'left';
+  placement: 'bottom-center' | 'right' | 'bottom-left' | 'bottom-right' | 'left';
   title: string;
   body: string;
 }
@@ -47,5 +47,11 @@ export const TOUR_STEPS: TourStep[] = [
     placement: 'left',
     title: '변수 모니터',
     body: '각 단계에서 변수 값이 어떻게 변하는지 실시간으로 추적합니다.\n변경된 변수는 노란색으로 강조됩니다.',
+  },
+  {
+    targetSelector: '[data-tour="gallery"]',
+    placement: 'bottom-right',
+    title: '예제 갤러리',
+    body: '이제 직접 탐색해 보세요!\n여기를 눌러 정렬, 탐색, 그래프 등 다양한 알고리즘 예제를 바로 불러올 수 있습니다.',
   },
 ];

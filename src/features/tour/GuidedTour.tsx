@@ -34,6 +34,12 @@ function calcTooltipPos(
         left: target.left,
         arrowSide: "top",
       };
+    case "bottom-right":
+      return {
+        top: target.bottom + TOOLTIP_GAP,
+        left: target.right - TOOLTIP_MAX_W,
+        arrowSide: "top",
+      };
     case "right":
       return {
         top: target.top + target.height / 2 - tooltipH / 2,
