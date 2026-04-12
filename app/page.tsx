@@ -13,7 +13,16 @@ import { GuidedTour } from "@/features/tour/GuidedTour";
 import { useTourStore } from "@/features/tour/useTourStore";
 import { IconFiles, IconSettings, IconRefresh, IconExpand, IconWarning, IconPencil } from "@/components/icons";
 import { detectLanguageFromCode } from "@/lib/languageDetection";
-import { highlightJsLine, highlightPythonLine } from "@/lib/syntaxHighlight";
+import {
+  lang,
+  languageDisplayLabel,
+  type SupportedLanguage,
+} from "@/lib/language";
+import {
+  highlightJavaLine,
+  highlightJsLine,
+  highlightPythonLine,
+} from "@/lib/syntaxHighlight";
 import { maxNumericAbs, formatWithBitMode } from "@/lib/formatValue";
 import { lineFromOffset, detectIndentSize, convertIndent } from "@/lib/textUtils";
 import { useKeyboardNavigation } from "@/hooks/useKeyboardNavigation";
@@ -33,10 +42,11 @@ function runButtonLabel(
 ) {
   if (isCodeEmpty) return "코드를 입력하세요";
   if (isStdinEmpty) return "예시 입력을 입력하세요";
-  if (status === "loading")
-    return language === "javascript"
-      ? "JS 환경 준비 중..."
-      : "Python 준비 중...";
+  if (status === "loading") {
+    if (lang(language).js) return "JS 환경 준비 중...";
+    if (lang(language).java) return "Java 환경 준비 중...";
+    return "Python 준비 중...";
+  }
   if (status === "running") return "디버깅 중...";
   if (status === "reinitializing") return "초기화 중...";
   if (status === "error") return "디버깅 불가";
@@ -47,10 +57,11 @@ const LAST_EXECUTED_CODE_KEY = "prova:lastExecutedCode";
 const LAST_EXECUTED_STDIN_KEY = "prova:lastExecutedStdin";
 const LAST_SELECTED_LANGUAGE_KEY = "prova:lastSelectedLanguage";
 
+
 export default function Page() {
   const [code, setCode] = useState("");
   const [tabSize, setTabSize] = useState<2 | 4>(4);
-  const [language, setLanguage] = useState("python");
+  const [language, setLanguage] = useState<SupportedLanguage>("python");
   const [toasts, setToasts] = useState<
     Array<{ id: number; kind: "warn" | "ok"; message: string }>
   >([]);
@@ -112,15 +123,23 @@ export default function Page() {
   const isError = uiMode === "errorStep";
   const isVisualizing = uiMode === "visualizing" || isError || isFallback;
   const isDebugMode = uiMode !== "ready";
-  const normalizedLanguage: "python" | "javascript" =
-    language === "javascript" ? "javascript" : "python";
+  const normalizedLanguage: "python" | "javascript" | "java" =
+    lang(language).js ? "javascript" : lang(language).java ? "java" : "python";
   const inferredLanguage = useMemo(
-    () => detectLanguageFromCode(code, normalizedLanguage),
-    [code, normalizedLanguage],
+    () =>
+      detectLanguageFromCode(
+        code,
+        lang(language).java
+          ? "java"
+          : lang(language).js
+            ? "javascript"
+            : "python",
+      ),
+    [code, language],
   );
   const isCodeEmpty = code.trim().length === 0;
   const isStdinEmpty =
-    inferredLanguage !== "javascript" && stdin.trim().length === 0;
+    lang(inferredLanguage).py && stdin.trim().length === 0;
   const isAnalyzingCode =
     pyodideStatus === "running" && !metadata && rawTrace.length > 0;
   const displayTags = useMemo(
@@ -241,8 +260,8 @@ export default function Page() {
         setStdin(savedStdin);
       }
       const savedLanguage = localStorage.getItem(LAST_SELECTED_LANGUAGE_KEY);
-      if (savedLanguage === "python" || savedLanguage === "javascript") {
-        setLanguage(savedLanguage);
+      if (savedLanguage === "python" || savedLanguage === "javascript" || savedLanguage === "java") {
+        setLanguage(savedLanguage as SupportedLanguage);
       }
     } catch {
       // localStorage access can fail in strict/private environments.
@@ -264,7 +283,7 @@ export default function Page() {
       setLanguage(inferredLanguage);
     }, 250);
     return () => clearTimeout(timer);
-  }, [inferredLanguage, isRunning, normalizedLanguage]);
+  }, [inferredLanguage, isRunning, language, normalizedLanguage]);
 
   const applyTabSizeToCode = (nextTabSize: 2 | 4) => {
     if (nextTabSize === tabSize) return;
@@ -371,14 +390,18 @@ export default function Page() {
             <IconWarning />
             <span>
               {pyodideStatus === "error" &&
-                (language === "javascript"
+                (lang(language).js
                   ? "JS 환경 초기화에 실패했습니다. 페이지를 새로고침해 주세요."
-                  : "Python 환경 초기화에 실패했습니다. 페이지를 새로고침해 주세요.")}
+                  : lang(language).java
+                    ? "Java 실행 환경에 연결하지 못했습니다. 설정을 확인하거나 잠시 후 다시 시도해 주세요."
+                    : "Python 환경 초기화에 실패했습니다. 페이지를 새로고침해 주세요.")}
               {isFallback &&
                 "AI 연결에 실패했습니다. 기본 변수 뷰로 코드 흐름을 추적합니다."}
               {!isFallback &&
                 globalError &&
-                `AI 분석 실패: ${globalError.message}`}
+                (globalError.type === "RUNTIME"
+                  ? `실행 오류: ${globalError.message}`
+                  : `AI 분석 실패: ${globalError.message}`)}
             </span>
           </div>
           {pyodideStatus === "error" && (
@@ -440,7 +463,7 @@ export default function Page() {
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium truncate">
-                  {language === "javascript" ? "algorithm.js" : "algorithm.py"}
+                  {lang(language).js ? "algorithm.js" : lang(language).java ? "Algorithm.java" : "algorithm.py"}
                 </span>
                 {isVisualizing && (
                   <span
@@ -459,14 +482,12 @@ export default function Page() {
                   data-tour="language"
                   className="h-7 rounded border border-prova-line bg-[#161b22] text-[11px] text-[#c9d1d9] px-2 focus:outline-none"
                   value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
+                  onChange={(e) => setLanguage(e.target.value as SupportedLanguage)}
                   aria-label="코드 언어 선택"
                 >
                   <option value="python">Python</option>
                   <option value="javascript">JavaScript</option>
-                  <option value="java" disabled>
-                    Java (준비중)
-                  </option>
+                  <option value="java">Java</option>
                   <option value="cpp" disabled>
                     C++ (준비중)
                   </option>
@@ -600,9 +621,11 @@ export default function Page() {
                         <span
                           className={`pl-2 text-prova-muted ${wordWrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}
                         >
-                          {language === "javascript"
+                          {lang(language).js
                             ? "여기에 JavaScript 코드를 입력하세요."
-                            : "여기에 Python 코드를 입력하세요."}
+                            : lang(language).java
+                              ? "여기에 Java 코드를 입력하세요."
+                              : "여기에 Python 코드를 입력하세요."}
                         </span>
                       </div>
                     ) : (
@@ -626,9 +649,11 @@ export default function Page() {
                             <span
                               className={`pl-2 ${wordWrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}
                             >
-                              {(language === "javascript"
+                              {(lang(language).js
                                 ? highlightJsLine
-                                : highlightPythonLine)(line).map(
+                                : lang(language).java
+                                  ? highlightJavaLine
+                                  : highlightPythonLine)(line).map(
                                 (token, idx) => (
                                   <span
                                     key={`edit-${lineIdx}-${idx}`}
@@ -733,9 +758,11 @@ export default function Page() {
             {/* Language badge */}
             <div className="shrink-0 px-3 py-2 border-t border-prova-line bg-[#0f141a]">
               <span className="text-[10px] text-prova-muted font-mono">
-                {language === "javascript"
+                {lang(language).js
                   ? "JavaScript ES2022 · 동기 코드만 지원 · async/await 미지원"
-                  : "Python 3.11 · Standard Library · No external packages"}
+                  : lang(language).java
+                    ? "Java · 외부 실행 서비스 연동"
+                    : "Python 3.11 · Standard Library · No external packages"}
               </span>
             </div>
           </section>
@@ -1106,17 +1133,19 @@ export default function Page() {
                       }
                       onClick={() => {
                         if (pyodideStatus !== "ready") return;
-                        const runLanguage = detectLanguageFromCode(
-                          code,
-                          normalizedLanguage,
-                        );
-                        if (runLanguage !== normalizedLanguage) {
-                          setLanguage(runLanguage);
-                          addToast(
-                            "ok",
-                            `코드 패턴을 감지해 ${runLanguage === "javascript" ? "JavaScript" : "Python"}로 전환했습니다. 다시 실행해 주세요.`,
+                        if (!lang(language).java) {
+                          const runLanguage = detectLanguageFromCode(
+                            code,
+                            lang(language).js ? "javascript" : "python",
                           );
-                          return;
+                          if (runLanguage !== normalizedLanguage) {
+                            setLanguage(runLanguage);
+                            addToast(
+                              "ok",
+                              `코드 패턴을 감지해 ${languageDisplayLabel(runLanguage)}로 전환했습니다. 다시 실행해 주세요.`,
+                            );
+                            return;
+                          }
                         }
                         if (isCodeEmpty) {
                           addToast(

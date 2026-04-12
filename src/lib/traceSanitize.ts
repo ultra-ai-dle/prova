@@ -1,4 +1,5 @@
 import { RawTraceStep } from "@/types/prova";
+import { JAVA_KEYWORDS } from "@/lib/languageDetection";
 
 export const BLOCKED_RUNTIME_VAR_NAMES = new Set([
   "modules",
@@ -36,6 +37,11 @@ export function isRuntimeNoiseVar(name: string, value: unknown, language = "pyth
   if (key.startsWith("__")) return true;
   if (language === "javascript") {
     if (["console", "readline", "arguments", "fs"].includes(key)) return true;
+    return false;
+  }
+  if (language === "java") {
+    if (key.startsWith("$") || ["this", "class", "super"].includes(key))
+      return true;
     return false;
   }
   // Python 전용 필터
@@ -114,7 +120,7 @@ export function collectUserDeclaredSymbols(code: string, language = "python") {
   for (const raw of lines) {
     // 언어별 주석 제거
     const line = (
-      language === "javascript"
+      language === "javascript" || language === "java"
         ? raw.replace(/\/\/.*/, "")
         : raw.replace(/#.*/, "")
     ).trim();
@@ -166,6 +172,46 @@ export function collectUserDeclaredSymbols(code: string, language = "python") {
           .trim()
           .replace(/^(?:const|let|var)\s+/, "");
         if (left && !/[.([\s]/.test(left)) add(left);
+      }
+    } else if (language === "java") {
+      const javaDecl = line.match(
+        /^(?:(?:(?:private|protected|public|static|final)\s+)*[\w<>\[\]]+)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*[=;(]/,
+      );
+      if (javaDecl && !JAVA_KEYWORDS.has(javaDecl[1])) add(javaDecl[1]);
+
+      const javaMethod = line.match(
+        /^(?:(?:private|protected|public|static|final|void|\w+)\s+)+([A-Za-z_$][A-Za-z0-9_$]*)\s*\(([^)]*)\)/,
+      );
+      if (javaMethod && !JAVA_KEYWORDS.has(javaMethod[1])) {
+        add(javaMethod[1]);
+        javaMethod[2].split(",").forEach((arg) => {
+          const parts = arg.trim().split(/\s+/);
+          if (parts.length >= 2) add(parts[parts.length - 1]);
+        });
+      }
+
+      const javaFor = line.match(
+        /^for\s*\(\s*\w+\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*[=:]/,
+      );
+      if (javaFor) add(javaFor[1]);
+
+      const javaAssign = line.indexOf("=");
+      if (
+        javaAssign > 0 &&
+        !line.includes("==") &&
+        !line.includes(">=") &&
+        !line.includes("<=") &&
+        !line.includes("!=")
+      ) {
+        const left = line.slice(0, javaAssign).trim();
+        const parts = left.split(/\s+/);
+        const candidate = parts[parts.length - 1].replace(/[\[\]]/g, "");
+        if (
+          candidate &&
+          !/[.(]/.test(candidate) &&
+          !JAVA_KEYWORDS.has(candidate)
+        )
+          add(candidate);
       }
     } else {
       // Python 기존 로직

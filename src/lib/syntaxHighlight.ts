@@ -1,4 +1,4 @@
-import { PY_KEYWORDS, JS_KEYWORDS } from "./languageDetection";
+import { PY_KEYWORDS, JS_KEYWORDS, JAVA_KEYWORDS } from "./languageDetection";
 
 export type HighlightToken = { text: string; className: string };
 
@@ -24,6 +24,14 @@ const PY_CONFIG: LanguageConfig = {
   commentPrefix: "#",
   keywords: PY_KEYWORDS,
   isString: (t) => t.startsWith('"') || t.startsWith("'"),
+};
+
+const JAVA_CONFIG: LanguageConfig = {
+  pattern:
+    /(\/\/.*$|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b[A-Za-z_$][A-Za-z0-9_$]*\b|\b\d+(?:\.\d+)?[LlFfDd]?\b)/g,
+  commentPrefix: "//",
+  keywords: JAVA_KEYWORDS,
+  isString: (t) => /^["']/.test(t),
 };
 
 function tokenizeLine(line: string, config: LanguageConfig): HighlightToken[] {
@@ -72,4 +80,8 @@ export function highlightJsLine(line: string): HighlightToken[] {
 
 export function highlightPythonLine(line: string): HighlightToken[] {
   return tokenizeLine(line, PY_CONFIG);
+}
+
+export function highlightJavaLine(line: string): HighlightToken[] {
+  return tokenizeLine(line, JAVA_CONFIG);
 }

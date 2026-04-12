@@ -1,11 +1,16 @@
-import { highlightJsLine, highlightPythonLine } from "@/lib/syntaxHighlight";
+import {
+  highlightJavaLine,
+  highlightJsLine,
+  highlightPythonLine,
+} from "@/lib/syntaxHighlight";
+import type { SupportedLanguage } from "@/lib/language";
 import { useLineStepMap } from "@/hooks/useLineStepMap";
 import { useLineClick } from "@/hooks/useLineClick";
 import type { MergedTraceStep } from "@/types/prova";
 
 interface DebugCodeEditorProps {
   code: string;
-  language: "python" | "javascript";
+  language: SupportedLanguage;
   wordWrap: boolean;
   tabSize: number;
   mergedTrace: MergedTraceStep[];
@@ -38,7 +43,11 @@ export function DebugCodeEditor({
   });
 
   const highlightLine =
-    language === "javascript" ? highlightJsLine : highlightPythonLine;
+    language === "javascript"
+      ? highlightJsLine
+      : language === "java"
+        ? highlightJavaLine
+        : highlightPythonLine;
 
   return (
     <div
@@ -82,12 +91,14 @@ export function DebugCodeEditor({
             title={
               hitInfo && hitInfo.totalHits > 1
                 ? `×${hitInfo.totalHits}`
-                : undefined
+                : active && hitInfo && hitInfo.totalHits === 1
+                  ? "current"
+                  : undefined
             }
           >
-            {/* 실행 도트 (2회 이상 실행된 줄만) */}
+            {/* 실행 도트: 다회 방문은 ×N, 현재 스텝(1회)도 표시 — JS console.log / Java println 등과 동일하게 */}
             <span className="w-3 shrink-0 flex items-center justify-center">
-              {hitInfo && hitInfo.totalHits >= 2 && (
+              {hitInfo && (hitInfo.totalHits >= 2 || active) && (
                 <span
                   className={`inline-block w-1.5 h-1.5 rounded-full ${dotClass}`}
                 />

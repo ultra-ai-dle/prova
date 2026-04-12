@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AnalyzeMetadata, AnalyzeAiResponse } from "@/types/prova";
+import { AnalyzeAiResponse } from "@/types/prova";
 import { stripCodeFence, tryParseJson } from "@/lib/jsonParsing";
+import { lang } from "@/lib/language";
 import {
   buildChain,
   callWithFallback,
   GeminiOptions,
 } from "@/lib/ai-providers";
 import {
-  ANALYZE_CODE_CHAR_LIMIT,
   ANALYZE_GEMINI_SCHEMA,
   compactCodeForAnalyze,
   compactVarTypes,
@@ -32,16 +32,31 @@ async function analyzeWithAi(
   const compactCode = compactCodeForAnalyze(code);
   const compactTypes = compactVarTypes(varTypes);
 
-  const isJs = language === "javascript";
-  const langLabel = isJs ? "JavaScript" : "Python";
-  const langSpecificHints = isJs
-    ? [
+  let langLabel: string;
+  let langSpecificHints: string[];
+  switch (language) {
+    case "javascript":
+      langLabel = "JavaScript";
+      langSpecificHints = [
         "JS 특화: Array.push/pop은 스택, shift/unshift(또는 shift/push)는 큐로 인식.",
         "JS 특화: Map은 dict, Set은 set에 대응. for...of, forEach 등 고차 함수 패턴도 인식.",
         "JS 특화: deque 없음 — 배열+shift/push 조합으로 BFS 큐를 구현함.",
         "JS 특화: 재귀 함수는 스택 프레임 없이 반복 구현과 동일하게 분류.",
-      ]
-    : ["deque()는 반드시 자료구조로 감지하고 append+popleft면 queue/BFS 반영."];
+      ];
+      break;
+    case "java":
+      langLabel = "Java";
+      langSpecificHints = [
+        "Java 특화: Stack<T>.push/pop은 스택, Queue<T>/Deque<T>.offer/poll은 큐로 인식.",
+        "Java 특화: Map<Integer, List<Integer>> 또는 인접 리스트 패턴이면 그래프 인식.",
+        "Java 특화: 이전 인덱스 참조 갱신 패턴(arr[i] = f(arr[i-1], …) 형식)이면 DP 인식.",
+        "Java 특화: PriorityQueue는 heap으로 감지.",
+      ];
+      break;
+    default:
+      langLabel = "Python";
+      langSpecificHints = ["deque()는 반드시 자료구조로 감지하고 append+popleft면 queue/BFS 반영."];
+  }
 
   const prompt = [
     `${langLabel} 코드의 자료구조/알고리즘 분류기다.`,
@@ -125,10 +140,9 @@ async function analyzeWithAi(
       varTypes,
     );
     const withDeque = applyDequeHints(withPartitionPivots, code, varTypes);
-    const withJsArray =
-      language === "javascript"
-        ? applyJsArrayHints(withDeque, code, varTypes)
-        : withDeque;
+    const withJsArray = lang(language).js
+      ? applyJsArrayHints(withDeque, code, varTypes)
+      : withDeque;
     const guarded = applyDirectionMapGuards(withJsArray, code);
     const withGraphMode = applyGraphModeInference(guarded, code);
     const withSpecial = enrichSpecialVarKinds(withGraphMode, code, varTypes);
@@ -163,6 +177,13 @@ export async function POST(req: NextRequest) {
       );
     }
     const metadata = await analyzeWithAi(code, varTypes, language);
+    if (process.env.NODE_ENV === "development") {
+      console.info(
+        "[/api/analyze] ok",
+        `language=${language}`,
+        `tags=${(metadata.tags ?? []).slice(0, 8).join(",")}`,
+      );
+    }
     return NextResponse.json(metadata);
   } catch (error) {
     // Keep fallback behavior, but log root cause for debugging.

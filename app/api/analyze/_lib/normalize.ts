@@ -1,5 +1,7 @@
 import { AnalyzeMetadata, AnalyzeAiResponse, LinearPivotSpec, Panel, Strategy } from "@/types/prova";
 import { normalizeAndDedupeTags } from "@/lib/tagNormalize";
+import { lang } from "@/lib/language";
+import { detectJavaPatterns } from "@/lib/javaFallbackHints";
 
 function uniq(items: string[]) {
   return Array.from(new Set(items.filter(Boolean)));
@@ -199,7 +201,7 @@ export function fallbackAnalyzeMetadata(
   let detected_data_structures: string[] = [];
   let detected_algorithms: string[] = [];
 
-  if (language === "javascript" && code) {
+  if (lang(language).js && code) {
     const hasStackOps = /\.push\s*\(|\.pop\s*\(\s*\)/.test(code);
     const hasQueueOps = /\.shift\s*\(\s*\)|\.unshift\s*\(/.test(code);
     const hasDfs = /recursive|dfs|DFS|깊이|Depth|stack/.test(code);
@@ -219,6 +221,15 @@ export function fallbackAnalyzeMetadata(
     } else if (hasQueueOps) {
       tags = ["queue"];
       detected_data_structures = ["queue"];
+    }
+  }
+
+  if (lang(language).java && code) {
+    const result = detectJavaPatterns(code);
+    if (result) {
+      tags = result.tags;
+      detected_data_structures = result.detected_data_structures;
+      detected_algorithms = result.detected_algorithms;
     }
   }
 

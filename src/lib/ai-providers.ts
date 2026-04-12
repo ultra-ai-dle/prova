@@ -47,6 +47,9 @@ export function providerKey(p: Provider): string | undefined {
 //
 // chain[0] = AI_PROVIDER + AI_MODEL          (main)
 // chain[1] = FALLBACK_PROVIDER + FALLBACK_MODEL  (explicit fallback, can cross providers)
+//
+// provider·model·해당 API 키는 모두 process.env에서만 읽는다. 기본값 주입 없음 — 비어 있으면 체인이 비고
+// analyze/explain 경로에서 NO_AI_PROVIDER_KEY 로 실패한다.
 
 export function buildChain(): ChainEntry[] {
   const mainProvider = (process.env.AI_PROVIDER ?? "")
