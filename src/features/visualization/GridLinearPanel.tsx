@@ -10,7 +10,7 @@ import {
   type LinearPointerMap
 } from "@/features/visualization/linearPointerHelpers";
 import { formatCellValue } from "@/lib/formatValue";
-import { is2DArray, inferBitWidthFromGrid, expand2DBitmaskGridTo3D } from "@/lib/dataDetection";
+import { is2DArray, is2DBitmaskGrid, inferBitWidthFromGrid, expand2DBitmaskGridTo3D } from "@/lib/dataDetection";
 
 type Props = {
   step: MergedTraceStep | null;
@@ -68,14 +68,6 @@ function getAll3DVars(step: MergedTraceStep): Array<{ name: string; value: unkno
     .map(([name, v]) => ({ name, value: v as unknown[][][] }));
 }
 
-function is2DBitmaskGrid(value: unknown): value is number[][] {
-  return is2DArray(value)
-    && (value as unknown[][]).every((row) =>
-      row.every(
-        (cell) => typeof cell === "number" && Number.isInteger(cell) && cell >= 0
-      )
-    );
-}
 
 function getBitmaskGridAs3DVar(step: MergedTraceStep, bitWidth = 1) {
   const entries = Object.entries(step.vars);
@@ -246,6 +238,10 @@ export function GridLinearPanel({
       ? pointersAtIndexFromSpecs(linearPivots, vars, linearVar.name, queue.length, oneDKeys)
       : new Map();
   const linearCtx = formatLinearAlgoContext(vars, linearContextVarNames);
+  const pointerIndices = [...linearPointerMap.keys()].sort((a, b) => a - b);
+  const hasRange = pointerIndices.length >= 2;
+  const rangeMin = hasRange ? pointerIndices[0] : -1;
+  const rangeMax = hasRange ? pointerIndices[pointerIndices.length - 1] : -1;
   const hasError = !!step.runtimeError;
 
   if (!shouldRenderGrid && !shouldRender3D && !linearVar) {
@@ -419,6 +415,13 @@ export function GridLinearPanel({
               {linearCtx}
             </div>
           ) : null}
+          {hasRange && (
+            <div className="flex items-center gap-1.5 text-[10px] font-mono text-[#a78bfa]/80">
+              <span className="text-[#7c3aed]">▸</span>
+              <span>range [{rangeMin}..{rangeMax}]</span>
+              <span className="text-prova-muted">· len {rangeMax - rangeMin + 1}</span>
+            </div>
+          )}
           <div className="flex items-start gap-1 overflow-x-auto prova-scrollbar pb-1">
             {queue.length === 0 ? (
               <span className="text-[11px] text-prova-muted italic">배열이 비어 있습니다.</span>
@@ -426,11 +429,24 @@ export function GridLinearPanel({
               queue.map((item, i) => {
                 const ptrs = linearPointerMap.get(i) ?? [];
                 const ring = ptrs[0]?.ringClass ?? "";
+                const inRange = hasRange && i >= rangeMin && i <= rangeMax;
+                const isRangeLeft = inRange && i === rangeMin;
+                const isRangeRight = inRange && i === rangeMax;
                 return (
                   <div key={`lin-${i}`} className="flex flex-col items-center gap-0.5 shrink-0 min-w-[34px]">
                     <div className="text-[10px] text-prova-muted font-mono tabular-nums">x{i}</div>
                     <div
-                      className={`min-w-8 h-8 px-1 rounded border text-[11px] font-mono grid place-items-center border-[#2d4f79] bg-[#11243d] text-[#c9d1d9] transition-all ${ring}`}
+                      className={[
+                        "min-w-8 h-8 px-1 text-[11px] font-mono grid place-items-center transition-all",
+                        inRange
+                          ? [
+                              "border-t-2 border-b-2 border-[#7c3aed]/60 bg-[#2e1065]/50 text-[#c4b5fd]",
+                              isRangeLeft  ? "border-l-2 rounded-l-md" : "border-l-0",
+                              isRangeRight ? "border-r-2 rounded-r-md" : "border-r-0",
+                              ring,
+                            ].join(" ")
+                          : `rounded border border-[#2d4f79] bg-[#11243d] text-[#c9d1d9] ${ring}`,
+                      ].join(" ")}
                     >
                       {typeof item === "number" && bitmaskMode && Number.isInteger(item) && item >= 0
                         ? item.toString(2).padStart(Math.max(1, bitWidth), "0")
