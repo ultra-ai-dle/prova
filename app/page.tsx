@@ -19,6 +19,9 @@ import {
   IconWarning,
   IconPencil,
 } from "@/components/icons";
+import { ExampleGallery } from "@/features/gallery/ExampleGallery";
+import { useGallery } from "@/features/gallery/useGallery";
+import type { ExampleItem } from "@/data/examples";
 import { detectLanguageFromCode } from "@/lib/languageDetection";
 import { highlightJsLine, highlightPythonLine } from "@/lib/syntaxHighlight";
 import { maxNumericAbs, formatWithBitMode } from "@/lib/formatValue";
@@ -84,6 +87,7 @@ export default function Page() {
   });
   const [editCursorLine, setEditCursorLine] = useState(1);
   const [bitmaskMode, setBitmaskMode] = useState(false);
+  const gallery = useGallery();
   const {
     splitRootRef,
     rightPaneRef,
@@ -325,6 +329,27 @@ export default function Page() {
     );
   }, []);
 
+  const handleGallerySelect = useCallback(
+    (example: ExampleItem) => {
+      setCode(example.code);
+      setStdin(example.stdin);
+      setLanguage(example.language);
+      gallery.close();
+    },
+    [setStdin, gallery],
+  );
+
+  const handleGalleryCardClick = useCallback(
+    (example: ExampleItem) => {
+      if (code.trim() === "") {
+        handleGallerySelect(example);
+      } else {
+        gallery.requestConfirm(example);
+      }
+    },
+    [code, handleGallerySelect, gallery],
+  );
+
   const { runtimeRef } = useProvaExecution({
     language,
     codeRef,
@@ -439,6 +464,14 @@ export default function Page() {
 
         <button
           className="w-7 h-7 flex items-center justify-center rounded text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors shrink-0"
+          aria-label="예제 갤러리"
+          title="예제 갤러리"
+          onClick={gallery.open}
+        >
+          <IconFiles />
+        </button>
+        <button
+          className="w-7 h-7 flex items-center justify-center rounded text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors shrink-0"
           aria-label="가이드 투어 다시보기"
           title="가이드 투어 다시보기"
           onClick={() => useTourStore.getState().startTour()}
@@ -446,6 +479,21 @@ export default function Page() {
           <IconSettings />
         </button>
       </header>
+
+      {/* ── Example Gallery Modal ──────────────────────────── */}
+      <ExampleGallery
+        isOpen={gallery.isOpen}
+        selectedCategory={gallery.selectedCategory}
+        confirmTarget={gallery.confirmTarget}
+        onClose={gallery.close}
+        onSelectCategory={gallery.selectCategory}
+        onSelect={handleGallerySelect}
+        onRequestConfirm={handleGalleryCardClick}
+        onCancelConfirm={gallery.cancelConfirm}
+        onConfirm={() => {
+          if (gallery.confirmTarget) handleGallerySelect(gallery.confirmTarget);
+        }}
+      />
 
       {/* ── Body ────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
