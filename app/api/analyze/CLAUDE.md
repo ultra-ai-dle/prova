@@ -11,9 +11,9 @@
 - 코드 + varTypes를 받아 알고리즘 분류(strategy) + 변수 매핑(var_mapping)을 결정하는 AI Phase 1
 - 상세 아키텍처: [docs/features/ai-pipeline.md](../../../docs/features/ai-pipeline.md)
 
-## 최우선 원칙: 타입도 이름도 역할을 결정하지 않는다
+## 최우선 원칙: 타입도 이름도 초기화도 역할을 결정하지 않는다
 
-**역할(role)은 오직 코드에서의 사용 패턴(usage)으로��� 결정한다.** AI가 코드를 읽고 판단한 역할을 전적으로 신뢰한다.
+**역할(role)은 오직 코드에서의 사용 패턴(usage)으로만 결정한다.** AI가 코드 전체를 읽고 판단한 역할을 전적으로 신뢰한다.
 
 ### 타입 기반 단언 금지
 
@@ -34,6 +34,46 @@
 - 이름이 `stack`이어도 AI가 queue로 판단했으면 → queue
 - 이름이 `graph`여도 AI가 GRID로 판단했으면 → GRID
 - 이름이 `pivot`이어도 AI가 index로 판단했으면 → `pivot_mode: "index"`
+- 이름이 `visited`, `seen`이어도 AI가 DP 테이블로 판단했으면 → DP
+
+### 초기화 패턴 기반 단언 금지
+
+초기화 코드는 역할을 결정하는 근거가 되지 않는다.
+
+```python
+# 아래 4가지 초기화 방식은 모두 같은 형태지만 역할이 완전히 다를 수 있다.
+asdf = [False] * n        # VISITED일 수도, DP 플래그일 수도, 다른 무언가일 수도
+asdf = [0] * n
+asdf = [0x0] * n
+asdf = ['F' for _ in range(n)]
+```
+
+```java
+boolean[] asdf = new boolean[n];  // boolean 타입이라도 VISITED가 아닐 수 있다
+int[] asdf = new int[n];          // int[]라도 DISTANCE가 아닐 수 있다
+```
+
+역할을 결정하는 것은 **해당 변수가 알고리즘 안에서 어떤 맥락으로 쓰이는지**다. 그 맥락 판단은 AI에게 전적으로 맡긴다.
+
+### enricher(클라이언트 후처리)의 허용 범위
+
+enricher가 판단할 수 있는 유일한 케이스는 **자료구조 연산 조합 자체가 역할을 직접 규정하는 경우**뿐이다.
+
+```
+// ✅ 허용 — 연산 조합이 역할을 직접 규정
+push + pop (LIFO)              → STACK
+push + shift (FIFO)            → QUEUE
+addFirst + addLast (양방향)    → DEQUE
+heapq.heappush(v, ...)         → HEAP
+parent[x] = parent[parent[x]] → UNIONFIND (경로 압축 구조 자체)
+
+// ❌ 금지 — 초기화·타입·이름으로 역할 결정
+[False]*n + [i]=True           → VISITED  ← 금지
+[INF]*n                        → DISTANCE ← 금지
+boolean[] 선언                 → VISITED  ← 금지
+int[] + Arrays.fill(...)       → DISTANCE ← 금지
+변수명 visited, dist, seen     → 역할 단언 ← 금지
+```
 
 ### 프롬프트 작성 기준
 
@@ -45,9 +85,14 @@
 // ❌ 이름 기반 단언 — 금지
 "int left=0, right=n-1 → pivot_mode=index"
 
+// ❌ 초기화 기반 단언 — 금지
+"boolean[] 변수는 VISITED로 분류"
+"[False]*n으로 초기화된 배열은 VISITED"
+
 // ✅ 사용 패턴 기반 — 올바른 형식
 "2D 컬렉션이 셀 격자로 쓰이고 방향벡터로 이동하면 GRID"
 "2D 컬렉션이 정점-정점 비용/연결을 담으면 GRAPH"
+"ArrayDeque가 offer/poll 패턴으로 쓰이면 QUEUE, push/pop 패턴이면 STACK"
 ```
 
 ## GRID 맵 vs GRAPH 판단
@@ -117,7 +162,6 @@ normalizeResponse 검증:
 - [ ] 방향벡터 변수 (dirs, delta) → var_mapping에서 제거
 - [ ] graph_mode 미지정 → 코드 패턴으로 directed/undirected 추론
 - [ ] heapq 패턴 → special_var_kinds HEAP 추가
-- [ ] `[False]*n` + 대입 패턴 → VISITED 추가
 - [ ] two-pointer 패턴 (int 변수 2개 이상 같은 배열 인덱싱) → linear_pivots 자동 생성
 
 AI 프로바이더 폴백:

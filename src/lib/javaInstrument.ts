@@ -11,9 +11,12 @@ const HELPER = [
   "    if(o instanceof int[][])return java.util.Arrays.deepToString((int[][])o);",
   "    if(o instanceof long[][])return java.util.Arrays.deepToString((long[][])o);",
   "    if(o instanceof Object[])return java.util.Arrays.deepToString((Object[])o);",
-  "    if(o instanceof java.util.List){",
+  "    if(o instanceof StringBuilder||o instanceof StringBuffer){",
+  "      return \"\\\"\"+o.toString().replace(\"\\\\\",\"\\\\\\\\\").replace(\"\\\"\",\"\\\\\\\"\").replace(\"\\n\",\"\\\\n\")+\"\\\"\";",
+  "    }",
+  "    if(o instanceof java.util.Collection){",
   "      StringBuilder b=new StringBuilder(\"[\");boolean f=true;",
-  "      for(Object x:(java.util.List<?>)o){if(!f)b.append(\",\");b.append(__s(x));f=false;}",
+  "      for(Object x:(java.util.Collection<?>)o){if(!f)b.append(\",\");b.append(__s(x));f=false;}",
   "      return b.append(\"]\").toString();",
   "    }",
   "    if(o instanceof java.util.Map){",
@@ -53,22 +56,38 @@ function isInitializerBrace(builtSoFar: string): boolean {
   return false;
 }
 
-function normalizeJava(code: string): string {
+/**
+ * 정규화 결과 + normalized line index → original line number(1-based) 매핑 반환.
+ * 원본 \n은 originalLine을 증가시키고, 인위적으로 삽입된 \n은 현재 originalLine을 유지.
+ */
+function normalizeJava(code: string): { normalized: string; lineMap: number[] } {
   let out   = "";
-  let paren = 0;   // () 깊이 — for(;;) 세미콜론 보호
+  let paren = 0;
   let inStr = false;
   let inChar = false;
   let escape = false;
+
+  // lineMap[i] = normalized 코드의 i번째 줄(0-based)이 대응하는 원본 라인(1-based)
+  const lineMap: number[] = [1];
+  let origLine = 1;
+
+  const pushNewline = (isOriginal: boolean) => {
+    out += "\n";
+    if (isOriginal) origLine++;
+    lineMap.push(origLine);
+  };
 
   for (let i = 0; i < code.length; i++) {
     const c    = code[i];
     const next = code[i + 1] ?? "";
 
-    if (escape)                       { out += c; escape = false; continue; }
+    if (escape)                         { out += c; escape = false; continue; }
     if (c === "\\" && (inStr || inChar)) { out += c; escape = true; continue; }
-    if (c === '"'  && !inChar)          { inStr  = !inStr;  out += c; continue; }
-    if (c === "'"  && !inStr)           { inChar = !inChar; out += c; continue; }
-    if (inStr || inChar)                { out += c; continue; }
+    if (c === '"'  && !inChar)           { inStr  = !inStr;  out += c; continue; }
+    if (c === "'"  && !inStr)            { inChar = !inChar; out += c; continue; }
+    if (inStr || inChar)                 { out += c; continue; }
+
+    if (c === "\n") { pushNewline(true); continue; }
 
     if (c === "(") paren++;
     if (c === ")") paren--;
@@ -76,53 +95,51 @@ function normalizeJava(code: string): string {
     out += c;
 
     if (c === "{") {
-      // 배열/객체 리터럴 초기화자는 줄 바꾸지 않음
-      if (!isInitializerBrace(out.slice(0, -1)) && next !== "\n") out += "\n";
+      if (!isInitializerBrace(out.slice(0, -1)) && next !== "\n") pushNewline(false);
       continue;
     }
     if (c === "}" && next && next !== "\n" && next !== ";" && next !== ",") {
-      out += "\n"; continue;
+      pushNewline(false); continue;
     }
-    if (c === ";" && paren === 0 && next !== "\n") out += "\n";
+    if (c === ";" && paren === 0 && next !== "\n") pushNewline(false);
   }
 
-  return out;
+  return { normalized: out, lineMap };
 }
 
 // ─── 변수 선언 / 대입 감지 정규식 ─────────────────────────────────────────────
 
-const PRIM   = "int|long|double|float|boolean|char|byte|short";
-const OBJ    = [
-  "String","Integer","Long","Double","Float","Boolean","Character",
-  "ArrayList","LinkedList","HashMap","TreeMap","HashSet","TreeSet",
-  "LinkedHashMap","LinkedHashSet","Stack","Deque","ArrayDeque","PriorityQueue",
-].join("|");
+const PRIM = "int|long|double|float|boolean|char|byte|short";
+
+// 기본형 외 모든 Java 클래스를 포괄한다 (대문자로 시작하는 식별자).
+// 특정 클래스 목록으로 제한하지 않는 이유:
+//   - 계측기가 "이 타입은 추적할 가치 없다"고 선제 판단하면 AI가 해당 변수를
+//     아예 볼 수 없어 맥락 판단 자체가 불가능해진다.
+//   - Python/JS worker는 모든 로컬 변수를 캡처한다 — Java도 동등해야 한다.
+//   - BufferedReader, StringBuilder, Scanner 등 I/O 클래스도 포함해야
+//     AI가 전체 변수 집합을 보고 역할을 판단할 수 있다.
+const CLS = "[A-Z][A-Za-z0-9_]*";
 
 // 클래스 레벨 static 필드 선언 (메서드 밖):
 //   [access] static [final] type[<G>][[][]] name ...
 const STATIC_FIELD_RE = new RegExp(
   `^\\s+(?:(?:private|public|protected)\\s+)?static\\s+(?:final\\s+)?` +
-  `(?:${PRIM}|${OBJ})(?:<[^>]*>)?(?:\\[\\])*\\s+(\\w+)(?:\\[\\])*`,
+  `(?:${PRIM}|${CLS})(?:<[^>]*>)?(?:\\[\\])*\\s+(\\w+)(?:\\[\\])*`,
 );
 
 // 지역변수 선언:  [final] type[<G>][[] ...] name[[] ...] =
 const VAR_DECL_RE = new RegExp(
   `^\\s+(?:(?:final|static)\\s+)?` +
-  `(?:${PRIM}|${OBJ})` +
+  `(?:${PRIM}|${CLS})` +
   `(?:<[^>]*>)?` +
   `(?:\\[\\])*\\s+(\\w+)(?:\\[\\])*\\s*=`,
 );
 
 // for 루프 변수: for (type name = | for (type name :
+// 기본형 외에 향상된 for 문의 클래스 타입도 포함 (for (String line : lines))
 const FOR_VAR_RE = new RegExp(
-  `^\\s*for\\s*\\(\\s*(?:${PRIM})\\s+(\\w+)\\s*[=:]`,
+  `^\\s*for\\s*\\(\\s*(?:${PRIM}|${CLS}(?:<[^>]*>)?(?:\\[\\])*)\\s+(\\w+)\\s*[=:]`,
 );
-
-// 순수 대입: name = | name[...] = | name[...][...] =
-const ASSIGN_RE = /^\s*(\w+)(?:\[[^\]]*\])*\s*(?:\+|-|\*|\/|%|&|\||\^|<<|>>|>>>)?=(?!=)/;
-
-// System.out.print* / System.err.print* 호출
-const PRINT_RE = /^\s*System\.(?:out|err)\.print(?:ln|f)?\s*\(/;
 
 // ─── 유틸 ──────────────────────────────────────────────────────────────────────
 
@@ -140,7 +157,7 @@ function makeTraceCall(
 ): string {
   const localActive = scopeVars.filter(v => v.depth <= currentDepth).map(v => v.name);
   const all = [...classVars, ...localActive];
-  if (all.length === 0) return "";
+  if (all.length === 0) return `__t(${lineNum});`;
   return `__t(${lineNum}, ${all.map(n => `"${n}", ${n}`).join(", ")});`;
 }
 
@@ -155,8 +172,8 @@ function makeTraceCall(
  * - depth 기반 스코프 추적: { 진입 시 depth 증가, } 이탈 시 해당 depth 변수 제거.
  */
 export function instrumentJavaCode(code: string): string {
-  const normalized = normalizeJava(code);
-  const lines      = normalized.split("\n");
+  const { normalized, lineMap } = normalizeJava(code);
+  const lines                   = normalized.split("\n");
   const result: string[] = [];
 
   let helperInjected = false;
@@ -172,7 +189,7 @@ export function instrumentJavaCode(code: string): string {
 
   for (let i = 0; i < lines.length; i++) {
     const line    = lines[i];
-    const lineNum = i + 1;
+    const lineNum = lineMap[i] ?? (i + 1);  // 원본 라인 번호 사용
     const trimmed = line.trim();
 
     const opens  = (line.match(/\{/g) ?? []).length;
@@ -198,13 +215,15 @@ export function instrumentJavaCode(code: string): string {
     }
 
     // ── 메서드 진입 감지 ───────────────────────────────────────────────────────
+    let isMethodEntryLine = false;
     if (
       inClassBody && !inMethod &&
       /\b(?:void|int|long|double|float|boolean|char|String)\b/.test(line) &&
       /\)\s*(?:throws\s+[\w,\s]+)?\s*\{/.test(line)
     ) {
-      inMethod    = true;
-      methodDepth = braceDepth + opens - closes;
+      inMethod         = true;
+      methodDepth      = braceDepth + opens - closes;
+      isMethodEntryLine = true;
     }
 
     result.push(line);
@@ -221,48 +240,35 @@ export function instrumentJavaCode(code: string): string {
       continue;
     }
 
-    // ── 계측 삽입 (메서드 내부만) ──────────────────────────────────────────────
+    // ── 계측 삽입 (메서드 내부, 모든 statement) ────────────────────────────────
     if (!inMethod) continue;
+    if (isMethodEntryLine) continue;
     if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
+    // 순수 블록 경계 라인은 statement가 아님
+    if (trimmed === "{" || trimmed === "}") continue;
 
-    // for 루프 변수: { 있는 블록 for문만 추적 (단일 라인 for문은 { 없으므로 제외)
+    // for 루프 변수: { 있는 블록 for문만 scopeVars에 추적
     const forMatch = line.match(FOR_VAR_RE);
     if (forMatch) {
       if (opens > 0) {
         const v = forMatch[1];
         if (!scopeVars.find(sv => sv.name === v)) scopeVars.push({ name: v, depth: braceDepth });
       }
+      result.push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`);
       continue;
     }
 
-    // 지역변수 선언
+    // 지역변수 선언: scopeVars에 추가 후 __t
     const declMatch = line.match(VAR_DECL_RE);
     if (declMatch) {
       const v = declMatch[1];
       if (!scopeVars.find(sv => sv.name === v)) scopeVars.push({ name: v, depth: braceDepth });
-      const call = makeTraceCall(lineNum, classVars, scopeVars, braceDepth);
-      if (call) result.push(`${leadingSpaces(line)}${call}`);
+      result.push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`);
       continue;
     }
 
-    // 대입문: 로컬 변수 또는 클래스 static 필드에 대한 대입 모두 캡처
-    const assignMatch = line.match(ASSIGN_RE);
-    if (assignMatch) {
-      const varName    = assignMatch[1];
-      const isLocal    = scopeVars.some(sv => sv.name === varName && sv.depth <= braceDepth);
-      const isClassVar = classVars.includes(varName);
-      if (isLocal || isClassVar) {
-        const call = makeTraceCall(lineNum, classVars, scopeVars, braceDepth);
-        if (call) result.push(`${leadingSpaces(line)}${call}`);
-      }
-      continue;
-    }
-
-    // System.out.print* — 출력 라인도 스텝으로 포함
-    if (PRINT_RE.test(line)) {
-      const call = makeTraceCall(lineNum, classVars, scopeVars, braceDepth);
-      if (call) result.push(`${leadingSpaces(line)}${call}`);
-    }
+    // 나머지 모든 statement (대입, if, while, return, 메서드 호출 등) — 모두 __t 삽입
+    result.push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`);
   }
 
   return result.join("\n");

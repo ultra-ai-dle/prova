@@ -13,10 +13,8 @@ export {
 } from "./normalize";
 export { enrichAnalyzeMetadataWithPartitionValuePivots } from "./partitionPivotEnrichment";
 export {
-  applyDequeHints,
-  applyJsArrayHints,
+  applyLanguageEnricher,
   applyDirectionMapGuards,
   applyGraphModeInference,
-  enrichSpecialVarKinds,
   enrichLinearPivots,
 } from "./enrichment";

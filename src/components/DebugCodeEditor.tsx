@@ -73,7 +73,7 @@ export function DebugCodeEditor({
             // 이미 실행 vs 아직 미실행 판별
             const steps = lineStepMap.get(lineNo)!;
             const hasVisited = steps.some((s) => s <= currentStepIndex);
-            dotClass = hasVisited ? "bg-[#58a6ff]/30" : "bg-[#58a6ff]/15";
+            dotClass = hasVisited ? "bg-[#58a6ff]/50" : "bg-[#58a6ff]/25";
           }
         }
 
@@ -96,9 +96,9 @@ export function DebugCodeEditor({
                   : undefined
             }
           >
-            {/* 실행 도트: 다회 방문은 ×N, 현재 스텝(1회)도 표시 — JS console.log / Java println 등과 동일하게 */}
+            {/* 실행 도트: trace에 등장한 모든 라인에 항상 표시 */}
             <span className="w-3 shrink-0 flex items-center justify-center">
-              {hitInfo && (hitInfo.totalHits >= 2 || active) && (
+              {hitInfo && (
                 <span
                   className={`inline-block w-1.5 h-1.5 rounded-full ${dotClass}`}
                 />

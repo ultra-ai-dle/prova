@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AnalyzeAiResponse } from "@/types/prova";
 import { stripCodeFence, tryParseJson } from "@/lib/jsonParsing";
-import { lang } from "@/lib/language";
 import {
   buildChain,
   callWithFallback,
@@ -14,11 +13,9 @@ import {
   normalizeResponse,
   fallbackAnalyzeMetadata,
   enrichAnalyzeMetadataWithPartitionValuePivots,
-  applyDequeHints,
-  applyJsArrayHints,
+  applyLanguageEnricher,
   applyDirectionMapGuards,
   applyGraphModeInference,
-  enrichSpecialVarKinds,
   enrichLinearPivots,
 } from "./_lib";
 
@@ -139,14 +136,10 @@ async function analyzeWithAi(
       code,
       varTypes,
     );
-    const withDeque = applyDequeHints(withPartitionPivots, code, varTypes);
-    const withJsArray = lang(language).js
-      ? applyJsArrayHints(withDeque, code, varTypes)
-      : withDeque;
-    const guarded = applyDirectionMapGuards(withJsArray, code);
+    const withLang = applyLanguageEnricher(withPartitionPivots, code, varTypes, language);
+    const guarded = applyDirectionMapGuards(withLang, code);
     const withGraphMode = applyGraphModeInference(guarded, code);
-    const withSpecial = enrichSpecialVarKinds(withGraphMode, code, varTypes);
-    return enrichLinearPivots(withSpecial, code, varTypes);
+    return enrichLinearPivots(withGraphMode, code, varTypes);
   };
 
   const raw = await callWithFallback(prompt, chain, geminiOpts);
