@@ -50,6 +50,20 @@ describe("isRuntimeNoiseVar", () => {
     expect(isRuntimeNoiseVar("zi", "zipimporter('/path')")).toBe(true);
   });
 
+  it("isRuntimeNoiseVar는 Java I/O 객체(Scanner, BufferedReader 등)를 노이즈로 판별한다 — 변수명 무관", () => {
+    const scannerVal = "java.util.Scanner[delimiters=\\p{javaWhitespace}+]";
+    const brVal = "java.io.BufferedReader@1a2b3c";
+    const bwVal = "java.io.BufferedWriter@4d5e6f";
+    const isrVal = "java.io.InputStreamReader@7a8b9c";
+    const pwVal = "java.io.PrintWriter@ab1cd2";
+    expect(isRuntimeNoiseVar("sc", scannerVal, "java")).toBe(true);
+    expect(isRuntimeNoiseVar("br", brVal, "java")).toBe(true);
+    expect(isRuntimeNoiseVar("reader", brVal, "java")).toBe(true);  // 변수명 무관
+    expect(isRuntimeNoiseVar("input", isrVal, "java")).toBe(true);  // 변수명 무관
+    expect(isRuntimeNoiseVar("bw", bwVal, "java")).toBe(true);
+    expect(isRuntimeNoiseVar("pw", pwVal, "java")).toBe(true);
+  });
+
   it("isRuntimeNoiseVar는 일반 유저 변수를 노이즈로 판별하지 않는다", () => {
     expect(isRuntimeNoiseVar("visited", [])).toBe(false);
     expect(isRuntimeNoiseVar("queue", [1, 2, 3])).toBe(false);

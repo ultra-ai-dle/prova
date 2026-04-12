@@ -76,7 +76,6 @@ describe("detectLanguageFromCode", () => {
   });
 
   /* ── 주석과 구문 패턴 ── */
-  // TODO: 주석 내 키워드가 단어 매칭 스코어에 반영되는 버그 수정 후 아래 테스트 기대값 업데이트 필요
   it("detectLanguageFromCode는 주석 내 구문 패턴(def/class/const 등)을 라인 스코어에 반영하지 않는다", () => {
     const code = "const x = 1;\n# def foo():\nconst y = 2;";
     expect(detectLanguageFromCode(code)).toBe("javascript");
@@ -120,6 +119,27 @@ def bfs(graph, start):
   return visited;
 }`;
     expect(detectLanguageFromCode(code)).toBe("javascript");
+  });
+
+  it("detectLanguageFromCode는 Java 10+ var 와 중괄호만으로 javascript 로 오판하지 않는다", () => {
+    const code = `public class Main {
+  public static void main(String[] args) {
+    var x = 1;
+    System.out.println(x);
+  }
+}`;
+    expect(detectLanguageFromCode(code)).toBe("java");
+  });
+
+  it("detectLanguageFromCode는 import java 가 있을 때 java 를 반환한다", () => {
+    const code = `import java.util.*;
+
+class Solver {
+  void run() {
+    var sc = new Scanner(System.in);
+  }
+}`;
+    expect(detectLanguageFromCode(code)).toBe("java");
   });
 });
 

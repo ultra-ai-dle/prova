@@ -209,8 +209,12 @@ export function instrumentJavaCode(code: string): string {
     if (inClassBody && !inMethod) {
       const fieldMatch = line.match(STATIC_FIELD_RE);
       // __step/__s/__t 헬퍼 자신은 제외
+      // 메서드 선언 제외: match 직후 문자열이 ( 로 시작하면 메서드 선언
       if (fieldMatch && !fieldMatch[1].startsWith("__")) {
-        if (!classVars.includes(fieldMatch[1])) classVars.push(fieldMatch[1]);
+        const afterMatch = line.slice((fieldMatch.index ?? 0) + fieldMatch[0].length);
+        if (!/^\s*\(/.test(afterMatch) && !classVars.includes(fieldMatch[1])) {
+          classVars.push(fieldMatch[1]);
+        }
       }
     }
 

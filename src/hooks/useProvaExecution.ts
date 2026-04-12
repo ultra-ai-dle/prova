@@ -16,6 +16,7 @@ import { lang, type SupportedLanguage } from "@/lib/language";
 export function useProvaExecution({
   language,
   codeRef,
+  languageUserPinnedRef,
   addToast,
   setPyodideStatus,
   setWorkerResult,
@@ -27,6 +28,8 @@ export function useProvaExecution({
 }: {
   language: string;
   codeRef: React.MutableRefObject<string>;
+  /** true면 실행 후 코드 기반 언어 추론으로 setLanguage 하지 않음 */
+  languageUserPinnedRef: React.MutableRefObject<boolean>;
   addToast: (kind: "warn" | "ok", message: string) => void;
   setPyodideStatus: (status: "loading" | "ready" | "running" | "error" | "reinitializing") => void;
   setWorkerResult: (payload: {
@@ -58,22 +61,29 @@ export function useProvaExecution({
             codeRef.current,
             language as SupportedLanguage,
           );
-          if (analyzeLanguage !== language) {
+          if (
+            !languageUserPinnedRef.current &&
+            analyzeLanguage !== language
+          ) {
             setLanguage(analyzeLanguage);
           }
+          // 드롭다운 고정 시 실제 실행 언어는 state.language — 감지값과 다를 수 있음
+          const pipelineLanguage = languageUserPinnedRef.current
+            ? (language as SupportedLanguage)
+            : analyzeLanguage;
           const allowlist = collectUserDeclaredSymbols(
             codeRef.current,
-            analyzeLanguage,
+            pipelineLanguage,
           );
           const sanitizedRawTrace = sanitizeRawTraceWithAllowlist(
-            sanitizeRawTrace(payload.rawTrace ?? [], analyzeLanguage),
+            sanitizeRawTrace(payload.rawTrace ?? [], pipelineLanguage),
             allowlist,
-            analyzeLanguage,
+            pipelineLanguage,
           );
           const sanitizedVarTypes = sanitizeVarTypesWithAllowlist(
-            sanitizeVarTypes(payload.varTypes ?? {}, analyzeLanguage),
+            sanitizeVarTypes(payload.varTypes ?? {}, pipelineLanguage),
             allowlist,
-            analyzeLanguage,
+            pipelineLanguage,
           );
           const sanitizedPayload = {
             ...payload,
@@ -82,7 +92,7 @@ export function useProvaExecution({
           };
           setWorkerResult(sanitizedPayload);
           try {
-            const analyzeKey = `${analyzeLanguage}\n@@\n${codeRef.current}\n@@\n${stableStringifyObject(sanitizedVarTypes)}\n@@\nmeta-v2-partition-pivot`;
+            const analyzeKey = `${pipelineLanguage}\n@@\n${codeRef.current}\n@@\n${stableStringifyObject(sanitizedVarTypes)}\n@@\nmeta-v2-partition-pivot`;
             const fromMemory = analyzeCacheRef.current.get(analyzeKey);
             const cachedMeta =
               analyzeCacheRef.current.get(analyzeKey) ??
@@ -103,7 +113,7 @@ export function useProvaExecution({
                     body: JSON.stringify({
                       code: codeRef.current,
                       varTypes: sanitizedVarTypes,
-                      language: analyzeLanguage,
+                      language: pipelineLanguage,
                     }),
                   });
                   if (!analyze.ok) {
@@ -223,6 +233,7 @@ export function useProvaExecution({
     setUiMode,
     setWorkerResult,
     setLanguage,
+    languageUserPinnedRef,
   ]);
 
   return { runtimeRef };

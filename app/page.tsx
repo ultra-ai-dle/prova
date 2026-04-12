@@ -70,12 +70,17 @@ function runButtonLabel(
 const LAST_EXECUTED_CODE_KEY = "prova:lastExecutedCode";
 const LAST_EXECUTED_STDIN_KEY = "prova:lastExecutedStdin";
 const LAST_SELECTED_LANGUAGE_KEY = "prova:lastSelectedLanguage";
+/** 드롭다운 등으로 언어를 직접 고른 경우 true — 코드 자동 감지로 덮어쓰지 않음 */
+const LAST_LANGUAGE_USER_PINNED_KEY = "prova:lastLanguageUserPinned";
 
 
 export default function Page() {
   const [code, setCode] = useState("");
   const [tabSize, setTabSize] = useState<2 | 4>(4);
   const [language, setLanguage] = useState<SupportedLanguage>("python");
+  /** true면 코드 패턴 추론으로 언어를 바꾸지 않음(드롭다운 선택이 우선) */
+  const [languageUserPinned, setLanguageUserPinned] = useState(false);
+  const languageUserPinnedRef = useRef(languageUserPinned);
   const [toasts, setToasts] = useState<
     Array<{ id: number; kind: "warn" | "ok"; message: string }>
   >([]);
@@ -289,6 +294,10 @@ export default function Page() {
   }, [code]);
 
   useEffect(() => {
+    languageUserPinnedRef.current = languageUserPinned;
+  }, [languageUserPinned]);
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem(LAST_EXECUTED_CODE_KEY);
       if (saved && saved.trim().length > 0) {
@@ -304,6 +313,8 @@ export default function Page() {
       if (savedLanguage === "python" || savedLanguage === "javascript" || savedLanguage === "java") {
         setLanguage(savedLanguage as SupportedLanguage);
       }
+      const pinned = localStorage.getItem(LAST_LANGUAGE_USER_PINNED_KEY);
+      if (pinned === "1") setLanguageUserPinned(true);
     } catch {
       // localStorage access can fail in strict/private environments.
     }
@@ -318,13 +329,31 @@ export default function Page() {
   }, [language]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(
+        LAST_LANGUAGE_USER_PINNED_KEY,
+        languageUserPinned ? "1" : "0",
+      );
+    } catch {
+      // ignore storage failures
+    }
+  }, [languageUserPinned]);
+
+  useEffect(() => {
+    if (languageUserPinned) return;
     if (isRunning) return;
     if (inferredLanguage === normalizedLanguage) return;
     const timer = setTimeout(() => {
       setLanguage(inferredLanguage);
     }, 250);
     return () => clearTimeout(timer);
-  }, [inferredLanguage, isRunning, language, normalizedLanguage]);
+  }, [
+    inferredLanguage,
+    isRunning,
+    language,
+    normalizedLanguage,
+    languageUserPinned,
+  ]);
 
   const applyTabSizeToCode = (nextTabSize: 2 | 4) => {
     if (nextTabSize === tabSize) return;
@@ -364,6 +393,7 @@ export default function Page() {
     (variant: ExampleVariant) => {
       setCode(variant.code);
       setStdin(variant.stdin);
+      setLanguageUserPinned(false);
       setLanguage(variant.language);
       gallery.close();
     },
@@ -384,6 +414,7 @@ export default function Page() {
   const { runtimeRef } = useProvaExecution({
     language,
     codeRef,
+    languageUserPinnedRef,
     addToast,
     setPyodideStatus,
     setWorkerResult,
@@ -569,7 +600,10 @@ export default function Page() {
                   data-tour="language"
                   className="h-7 rounded border border-prova-line bg-[#161b22] text-[11px] text-[#c9d1d9] px-2 focus:outline-none"
                   value={language}
-                  onChange={(e) => setLanguage(e.target.value as SupportedLanguage)}
+                  onChange={(e) => {
+                    setLanguageUserPinned(true);
+                    setLanguage(e.target.value as SupportedLanguage);
+                  }}
                   aria-label="코드 언어 선택"
                 >
                   <option value="python">Python</option>
@@ -1221,7 +1255,7 @@ export default function Page() {
                       }
                       onClick={() => {
                         if (pyodideStatus !== "ready") return;
-                        if (!lang(language).java) {
+                        if (!languageUserPinned && !lang(language).java) {
                           const runLanguage = detectLanguageFromCode(
                             code,
                             lang(language).js ? "javascript" : "python",

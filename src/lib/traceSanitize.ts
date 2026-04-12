@@ -42,6 +42,10 @@ export function isRuntimeNoiseVar(name: string, value: unknown, language = "pyth
   if (language === "java") {
     if (key.startsWith("$") || ["this", "class", "super"].includes(key))
       return true;
+    // I/O 유틸리티 객체 — Scanner, BufferedReader 등 (변수명 무관, value 패턴으로 판단)
+    const text = typeof value === "string" ? value : "";
+    if (/^java\.(util\.Scanner\b|io\.(Buffered(?:Reader|Writer)|InputStreamReader|PrintWriter|StreamTokenizer)\b)/.test(text))
+      return true;
     return false;
   }
   // Python 전용 필터

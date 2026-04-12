@@ -191,6 +191,22 @@ export const JAVA_LANGUAGE_HINTS = [
   "package",
 ];
 
+/** 휴리스틱 단어 스캔용 — 블록·라인 주석을 제거한다(문자열 내부는 완벽하지 않음). */
+export function stripCommentsForLanguageHeuristics(code: string): string {
+  const withoutBlock = code.replace(/\/\*[\s\S]*?\*\//g, " ");
+  return withoutBlock
+    .replace(/(^|[^\n])\/\/.*$/gm, "$1 ")
+    .replace(/#.*/g, " ");
+}
+
+function wordMembership(w: string): { py: boolean; js: boolean; java: boolean } {
+  return {
+    py: PY_KEYWORDS.has(w) || PYTHON_LANGUAGE_HINTS.includes(w),
+    js: JS_KEYWORDS.has(w) || JAVASCRIPT_LANGUAGE_HINTS.includes(w),
+    java: JAVA_KEYWORDS.has(w) || JAVA_LANGUAGE_HINTS.includes(w),
+  };
+}
+
 export function detectLanguageFromCode(
   code: string,
   fallback: SupportedLanguage = "python",
@@ -218,11 +234,18 @@ export function detectLanguageFromCode(
       pyScore += 2;
     if (/\bprint\s*\(/.test(pyLine)) pyScore += 1;
 
-    if (/\b(?:const|let|var)\s+[A-Za-z_$][A-Za-z0-9_$]*/.test(cStyleLine))
+    // const/let 은 JS·TS에 강한 신호. Java 10+ 의 var 는 JS 와 겹치므로 약한 점수만 부여한다.
+    if (/\b(?:const|let)\s+[A-Za-z_$][A-Za-z0-9_$]*/.test(cStyleLine))
       jsScore += 3;
+    if (/\bvar\s+[A-Za-z_$][A-Za-z0-9_$]*/.test(cStyleLine)) jsScore += 1;
     if (/\bfunction\b|\=\>\s*/.test(cStyleLine)) jsScore += 3;
     if (/\bconsole\.log\s*\(/.test(cStyleLine)) jsScore += 2;
-    if (/[{};]|===|!==/.test(cStyleLine)) jsScore += 1;
+    // C 계열 공통 문법 — JS 만 올리면 Java 가 불리해져 양쪽에 동일 반영
+    if (/[{};]/.test(cStyleLine)) {
+      jsScore += 1;
+      javaScore += 1;
+    }
+    if (/===|!==/.test(cStyleLine)) jsScore += 1;
 
     if (/^\s*(public|private|protected)?\s*(static\s+)?(class|interface|enum)\s+/.test(cStyleLine))
       javaScore += 4;
@@ -232,14 +255,17 @@ export function detectLanguageFromCode(
     if (/System\.(out|in)\b/.test(cStyleLine)) javaScore += 2;
   }
 
-  // TODO: 주석 내 키워드도 스코어에 반영되는 버그 — compact 대신 주석 제거된 텍스트를 사용해야 함
+  const codeForWords = stripCommentsForLanguageHeuristics(compact);
   const wordPattern = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
-  const words = compact.match(wordPattern) ?? [];
+  const words = codeForWords.match(wordPattern) ?? [];
   for (const w of words) {
-    if (PY_KEYWORDS.has(w) || PYTHON_LANGUAGE_HINTS.includes(w)) pyScore += 1;
-    if (JS_KEYWORDS.has(w) || JAVASCRIPT_LANGUAGE_HINTS.includes(w))
-      jsScore += 1;
-    if (JAVA_KEYWORDS.has(w) || JAVA_LANGUAGE_HINTS.includes(w)) javaScore += 1;
+    const m = wordMembership(w);
+    const nLang = (m.py ? 1 : 0) + (m.js ? 1 : 0) + (m.java ? 1 : 0);
+    // 여러 언어 예약어에 동시에 걸리는 토큰(class, return, import 등)은 구분력이 없어 스코어에서 제외
+    if (nLang !== 1) continue;
+    if (m.py) pyScore += 1;
+    if (m.js) jsScore += 1;
+    if (m.java) javaScore += 1;
   }
 
   if (
