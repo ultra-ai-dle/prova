@@ -15,44 +15,57 @@ interface TooltipPos {
 
 const TOOLTIP_GAP = 12;
 const TOOLTIP_MAX_W = 320;
+const VIEWPORT_PAD = 8;
 
 function calcTooltipPos(
   target: DOMRect,
   placement: TourStep["placement"],
   tooltipH: number,
 ): TooltipPos {
+  let pos: TooltipPos;
   switch (placement) {
     case "bottom-center":
-      return {
+      pos = {
         top: target.bottom + TOOLTIP_GAP,
         left: target.left + target.width / 2 - TOOLTIP_MAX_W / 2,
         arrowSide: "top",
       };
+      break;
     case "bottom-left":
-      return {
+      pos = {
         top: target.bottom + TOOLTIP_GAP,
         left: target.left,
         arrowSide: "top",
       };
+      break;
     case "bottom-right":
-      return {
+      pos = {
         top: target.bottom + TOOLTIP_GAP,
         left: target.right - TOOLTIP_MAX_W,
         arrowSide: "top",
       };
+      break;
     case "right":
-      return {
+      pos = {
         top: target.top + target.height / 2 - tooltipH / 2,
         left: target.right + TOOLTIP_GAP,
         arrowSide: "left",
       };
+      break;
     case "left":
-      return {
+      pos = {
         top: target.top + target.height / 2 - tooltipH / 2,
         left: target.left - TOOLTIP_MAX_W - TOOLTIP_GAP,
         arrowSide: "right",
       };
+      break;
   }
+
+  // Viewport clamp
+  pos.left = Math.max(VIEWPORT_PAD, Math.min(pos.left, window.innerWidth - TOOLTIP_MAX_W - VIEWPORT_PAD));
+  pos.top = Math.max(VIEWPORT_PAD, Math.min(pos.top, window.innerHeight - tooltipH - VIEWPORT_PAD));
+
+  return pos;
 }
 
 /* ── Spotlight clip-path builder ─────────────────────── */
