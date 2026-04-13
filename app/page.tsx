@@ -18,7 +18,9 @@ import {
   IconExpand,
   IconWarning,
   IconPencil,
+  IconMail,
 } from "@/components/icons";
+import { ContactModal } from "@/components/ContactModal";
 import { ExampleGallery } from "@/features/gallery/ExampleGallery";
 import { useGallery } from "@/features/gallery/useGallery";
 import type { ExampleItem, ExampleVariant } from "@/data/examples";
@@ -73,7 +75,6 @@ const LAST_SELECTED_LANGUAGE_KEY = "prova:lastSelectedLanguage";
 /** 드롭다운 등으로 언어를 직접 고른 경우 true — 코드 자동 감지로 덮어쓰지 않음 */
 const LAST_LANGUAGE_USER_PINNED_KEY = "prova:lastLanguageUserPinned";
 
-
 export default function Page() {
   const [code, setCode] = useState("");
   const [lastRunCode, setLastRunCode] = useState<string | null>(null);
@@ -104,6 +105,7 @@ export default function Page() {
   });
   const [editCursorLine, setEditCursorLine] = useState(1);
   const [bitmaskMode, setBitmaskMode] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
   const gallery = useGallery();
   const {
     splitRootRef,
@@ -149,8 +151,11 @@ export default function Page() {
   const isError = uiMode === "errorStep";
   const isVisualizing = uiMode === "visualizing" || isError || isFallback;
   const isDebugMode = uiMode !== "ready";
-  const normalizedLanguage: "python" | "javascript" | "java" =
-    lang(language).js ? "javascript" : lang(language).java ? "java" : "python";
+  const normalizedLanguage: "python" | "javascript" | "java" = lang(language).js
+    ? "javascript"
+    : lang(language).java
+      ? "java"
+      : "python";
   const inferredLanguage = useMemo(
     () =>
       detectLanguageFromCode(
@@ -164,8 +169,7 @@ export default function Page() {
     [code, language],
   );
   const isCodeEmpty = code.trim().length === 0;
-  const isStdinEmpty =
-    lang(inferredLanguage).py && stdin.trim().length === 0;
+  const isStdinEmpty = lang(inferredLanguage).py && stdin.trim().length === 0;
   const isAnalyzingCode =
     pyodideStatus === "running" && !metadata && rawTrace.length > 0;
   const displayTags = useMemo(
@@ -296,7 +300,11 @@ export default function Page() {
         setStdin(savedStdin);
       }
       const savedLanguage = localStorage.getItem(LAST_SELECTED_LANGUAGE_KEY);
-      if (savedLanguage === "python" || savedLanguage === "javascript" || savedLanguage === "java") {
+      if (
+        savedLanguage === "python" ||
+        savedLanguage === "javascript" ||
+        savedLanguage === "java"
+      ) {
         setLanguage(savedLanguage as SupportedLanguage);
       }
       const pinned = localStorage.getItem(LAST_LANGUAGE_USER_PINNED_KEY);
@@ -517,6 +525,14 @@ export default function Page() {
 
         <button
           className="w-7 h-7 flex items-center justify-center rounded text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors shrink-0"
+          aria-label="문의하기"
+          title="문의하기"
+          onClick={() => setContactOpen(true)}
+        >
+          <IconMail />
+        </button>
+        <button
+          className="w-7 h-7 flex items-center justify-center rounded text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors shrink-0"
           data-tour="gallery"
           aria-label="예제 갤러리"
           title="예제 갤러리"
@@ -534,6 +550,14 @@ export default function Page() {
         </button>
       </header>
 
+      {/* ── Contact Modal ──────────────────────────────────── */}
+      <ContactModal
+        isOpen={contactOpen}
+        onClose={() => setContactOpen(false)}
+        currentCode={code}
+        currentStdin={stdin}
+      />
+
       {/* ── Example Gallery Modal ──────────────────────────── */}
       <ExampleGallery
         isOpen={gallery.isOpen}
@@ -544,7 +568,8 @@ export default function Page() {
         onRequestConfirm={handleGalleryCardClick}
         onCancelConfirm={gallery.cancelConfirm}
         onConfirm={() => {
-          if (gallery.confirmVariant) handleGallerySelect(gallery.confirmVariant);
+          if (gallery.confirmVariant)
+            handleGallerySelect(gallery.confirmVariant);
         }}
       />
 
@@ -568,7 +593,11 @@ export default function Page() {
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium truncate">
-                  {lang(language).js ? "algorithm.js" : lang(language).java ? "Algorithm.java" : "algorithm.py"}
+                  {lang(language).js
+                    ? "algorithm.js"
+                    : lang(language).java
+                      ? "Algorithm.java"
+                      : "algorithm.py"}
                 </span>
                 {isVisualizing && (
                   <span
@@ -738,44 +767,44 @@ export default function Page() {
                       </div>
                     ) : (
                       <div className={wordWrap ? undefined : "min-w-max"}>
-                      {code.split("\n").map((line, lineIdx) => {
-                        const lineNo = lineIdx + 1;
-                        const isActiveLine = lineNo === editCursorLine;
-                        return (
-                          <div
-                            key={`edit-line-${lineIdx}`}
-                            className={`flex w-full ${isActiveLine ? "bg-[#1a2533]/55 border-l-2 border-[#58a6ff]" : "border-l-2 border-transparent"}`}
-                          >
-                            <span
-                              className={`w-9 shrink-0 text-right pr-3 select-none text-[11px] leading-5 ${
-                                isActiveLine
-                                  ? "text-[#58a6ff]"
-                                  : "text-[#4a5568]"
-                              }`}
+                        {code.split("\n").map((line, lineIdx) => {
+                          const lineNo = lineIdx + 1;
+                          const isActiveLine = lineNo === editCursorLine;
+                          return (
+                            <div
+                              key={`edit-line-${lineIdx}`}
+                              className={`flex w-full ${isActiveLine ? "bg-[#1a2533]/55 border-l-2 border-[#58a6ff]" : "border-l-2 border-transparent"}`}
                             >
-                              {lineNo}
-                            </span>
-                            <span
-                              className={`pl-2 ${wordWrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}
-                            >
-                              {(lang(language).js
-                                ? highlightJsLine
-                                : lang(language).java
-                                  ? highlightJavaLine
-                                  : highlightPythonLine)(line).map(
-                                (token, idx) => (
-                                  <span
-                                    key={`edit-${lineIdx}-${idx}`}
-                                    className={token.className}
-                                  >
-                                    {token.text}
-                                  </span>
-                                ),
-                              )}
-                            </span>
-                          </div>
-                        );
-                      })}
+                              <span
+                                className={`w-9 shrink-0 text-right pr-3 select-none text-[11px] leading-5 ${
+                                  isActiveLine
+                                    ? "text-[#58a6ff]"
+                                    : "text-[#4a5568]"
+                                }`}
+                              >
+                                {lineNo}
+                              </span>
+                              <span
+                                className={`pl-2 ${wordWrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}
+                              >
+                                {(lang(language).js
+                                  ? highlightJsLine
+                                  : lang(language).java
+                                    ? highlightJavaLine
+                                    : highlightPythonLine)(line).map(
+                                  (token, idx) => (
+                                    <span
+                                      key={`edit-${lineIdx}-${idx}`}
+                                      className={token.className}
+                                    >
+                                      {token.text}
+                                    </span>
+                                  ),
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
