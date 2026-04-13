@@ -1,14 +1,12 @@
 <!-- Hero -->
 <img width="2544" alt="hero" src="https://github.com/user-attachments/assets/fa88a229-bb90-4a4f-9baa-09f54426a673" />
 
-
 <br clear="both" />
 <br clear="both" />
 <br clear="both" />
 <br clear="both" />
 <br clear="both" />
 <br clear="both" />
-
 
 <!-- Introduce -->
 <img width="2122" alt="introduce" src="https://github.com/user-attachments/assets/76804a04-648b-42b3-9ec3-9f64448daabe" />
@@ -30,7 +28,6 @@
 
 </div>
 
-
 <br clear="both" />
 <br clear="both" />
 <br clear="both" />
@@ -38,11 +35,9 @@
 <!-- Features -->
 <img width="2122" alt="features" src="https://github.com/user-attachments/assets/47622472-9498-4f02-8581-3212b9a4b4d1" />
 
-
 <br clear="both" />
 <br clear="both" />
 <br clear="both" />
-
 
 ### 1. 코드 실행 → AI 시각화
 
@@ -51,8 +46,6 @@
 <!-- ![풀코스 데모](demo/01-full-pipeline.gif) -->
 
 ![demo-01](https://github.com/user-attachments/assets/fb0d91e4-1914-4504-a3fa-c1a11058c4a0)
-
-
 
 <br clear="both" />
 
@@ -64,8 +57,6 @@
 
 ![demo-02](https://github.com/user-attachments/assets/a498eafd-641f-4a8d-ad85-60404fd63c43)
 
-
-
 <br clear="both" />
 
 ### 3. 편의 기능
@@ -75,8 +66,6 @@
 <!-- ![편의 기능 데모](demo/03-convenience.gif) -->
 
 ![Demo-03](https://github.com/user-attachments/assets/4c0173a7-fc23-42ce-b8ea-9a7c9b302307)
-
-
 
 <br clear="both" />
 <br clear="both" />
@@ -137,7 +126,6 @@
   <img src="https://img.shields.io/badge/Testing_Library-E33332?style=for-the-badge&logo=testinglibrary&logoColor=white">
 </span>
 
-
 <br clear="both" />
 <br clear="both" />
 <br clear="both" />
@@ -176,7 +164,6 @@
 
 </div>
 
-
 <br clear="both" />
 <br clear="both" />
 <br clear="both" />
@@ -194,10 +181,10 @@
 
 ```sh
 # 저장소 클론
-git clone https://github.com/ultra-ai-dle/prova.git
+git clone https://github.com/ultra-ai-dle/frogger.git
 
 # 프로젝트 루트로 이동
-cd prova
+cd frogger
 
 # 의존성 설치
 npm install
@@ -230,6 +217,14 @@ FALLBACK_MODEL=gemini-2.5-flash-lite
 # ─── Java 원격 실행 (Java 언어 사용 시 필수 · 토큰은 upstream 정책에 따라)
 JAVA_EXECUTION_SERVICE_URL=
 JAVA_EXECUTION_SERVICE_TOKEN=
+
+# ─── Contact Email (SMTP · 문의 메일 수신 시 필수)
+CONTACT_TO_EMAIL=
+CONTACT_FROM_EMAIL=
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASS=
 ```
 
 <br clear="both" />
@@ -250,10 +245,9 @@ JAVA_EXECUTION_SERVICE_TOKEN=
 <br />
 
 | <img src="https://avatars.githubusercontent.com/u/155948612?v=4" width="200" style="border-radius: 50%;" /> | <img src="https://avatars.githubusercontent.com/u/97656991?v=4" width="200" style="border-radius: 50%;" /> | <img src="https://avatars.githubusercontent.com/u/50124461?v=4" width="200" style="border-radius: 50%;" /> | <img src="https://avatars.githubusercontent.com/u/147925385?v=4" width="200" style="border-radius: 50%;" /> |
-| :--------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------: |
-| **[김근선](https://github.com/geunseonkim)** | **[정아현](https://github.com/unhhyyeexx)** | **[현승준](https://github.com/seungjoonH)** | **[홍민정](https://github.com/mindaaaa)** |
-| 하 이 시간이 와버린 것인가 | 저 못하겠어요 | AI 는 신이야! | 컴퓨터 잘 몰라요 |
-
+| :---------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------: |
+|                                **[김근선](https://github.com/geunseonkim)**                                 |                                **[정아현](https://github.com/unhhyyeexx)**                                 |                                **[현승준](https://github.com/seungjoonH)**                                 |                                  **[홍민정](https://github.com/mindaaaa)**                                  |
+|                                         하 이 시간이 와버린 것인가                                          |                                               저 못하겠어요                                                |                                               AI 는 신이야!                                                |                                              컴퓨터 잘 몰라요                                               |
 
 <br clear="both" />
 <br clear="both" />
@@ -267,15 +261,12 @@ JAVA_EXECUTION_SERVICE_TOKEN=
 <br clear="both" />
 <br clear="both" />
 
-
 - [전체 파이프라인](docs/architecture.md)
 - [Execution Engine](docs/features/execution.md)
 - [Trace 병합](docs/features/trace.md)
 - [AI Pipeline](docs/features/ai-pipeline.md)
 - [Visualization](docs/features/visualization.md)
 - [커맨드 가이드](docs/commands.md)
-
-
 
 <br clear="both" />
 <br clear="both" />
