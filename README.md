@@ -50,6 +50,9 @@
 
 <!-- ![풀코스 데모](demo/01-full-pipeline.gif) -->
 
+![demo-01](https://github.com/user-attachments/assets/fb0d91e4-1914-4504-a3fa-c1a11058c4a0)
+
+
 
 <br clear="both" />
 
@@ -59,6 +62,9 @@
 
 <!-- ![스텝 디버깅 데모](demo/02-debugging.gif) -->
 
+![demo-02](https://github.com/user-attachments/assets/a498eafd-641f-4a8d-ad85-60404fd63c43)
+
+
 
 <br clear="both" />
 
@@ -67,6 +73,9 @@
 가이드 투어로 처음 사용자를 안내하고, 한국어/영어 전환과 버그 리포팅을 지원합니다.
 
 <!-- ![편의 기능 데모](demo/03-convenience.gif) -->
+
+![Demo-03](https://github.com/user-attachments/assets/4c0173a7-fc23-42ce-b8ea-9a7c9b302307)
+
 
 
 <br clear="both" />
