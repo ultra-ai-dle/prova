@@ -1,7 +1,7 @@
 # Execution Engine
 
 ## 한줄 요약
-Web Worker 기반 Python(Pyodide)/JS(Acorn 계측) 코드 실행 + trace 수집 엔진.
+Web Worker 기반 Python(Pyodide)/JS(Acorn 계측) 코드 실행 + Java 원격 실행 + trace 수집 엔진. Java 상세는 [java-execution.md](./java-execution.md) 참조.
 
 ## 데이터 흐름
 

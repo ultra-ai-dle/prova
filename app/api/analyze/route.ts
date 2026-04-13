@@ -18,6 +18,7 @@ import {
   applyGraphModeInference,
   enrichLinearPivots,
 } from "./_lib";
+import { stripComments } from "@/lib/stripComments";
 
 async function analyzeWithAi(
   code: string,
@@ -26,7 +27,8 @@ async function analyzeWithAi(
 ) {
   const chain = buildChain();
   if (chain.length === 0) throw new Error("NO_AI_PROVIDER_KEY");
-  const compactCode = compactCodeForAnalyze(code);
+  const lang = language === "javascript" ? "javascript" : language === "java" ? "java" : "python";
+  const compactCode = compactCodeForAnalyze(stripComments(code, lang));
   const compactTypes = compactVarTypes(varTypes);
 
   let langLabel: string;

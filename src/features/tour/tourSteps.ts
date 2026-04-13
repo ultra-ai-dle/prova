@@ -9,7 +9,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     targetSelector: '[data-tour="header"]',
     placement: 'bottom-center',
-    title: 'Prova에 오신 것을 환영합니다',
+    title: 'Frogger에 오신 것을 환영합니다',
     body: 'AI가 알고리즘의 실행 흐름을 시각화해 주는 디버거입니다.\n핵심 기능을 안내해 드릴게요. 이 투어는 약 1분 정도 걸립니다.',
   },
   {
