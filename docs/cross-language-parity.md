@@ -22,16 +22,18 @@ AI 응답 자체가 아닌, AI 응답을 보정하는 코드가 언어별로 불
 
 ## 현재 언어별 후처리 적용 현황
 
-| 함수 | Python | JS | Java |
+> 아래 표는 2026-04-12 언어별 enricher 리팩토링 이후 현재 상태이다. 이전 상태(applyDequeHints, applyJsArrayHints 등)는 하단 「구현 완료 보고」 참조.
+
+| enricher 파일 | Python | JS | Java |
 |------|--------|-----|------|
-| `applyDequeHints` | ✅ `deque()` 패턴 감지 | ✅ (연쇄 적용, 실효 없음) | ✅ (연쇄 적용, 실효 없음) |
-| `applyJsArrayHints` | ❌ | ✅ (부분적) | ❌ |
-| `enrichSpecialVarKinds` | ✅ Python 패턴 전용 | ✅ (실효 없음) | ✅ (실효 없음) |
-| Java 전용 enrichment | ❌ | ❌ | **없음** |
+| `enrichers/python.ts` | ✅ deque, heapq, stack, visited, distance, unionfind | — | — |
+| `enrichers/javascript.ts` | — | ✅ push/pop(STACK), push/shift(QUEUE), 양방향(DEQUE) | — |
+| `enrichers/java.ts` | — | — | ✅ PriorityQueue(HEAP), ArrayDeque(QUEUE/STACK/DEQUE), boolean[](VISITED), int[]+Arrays.fill(DISTANCE) |
+| 디스패처 | `applyLanguageEnricher()` — 언어에 따라 위 enricher 자동 선택 |
 
 ---
 
-## 루트 원인
+## 루트 원인 (해결 완료 — 아래는 리팩토링 이전 분석 기록)
 
 ### 1. `detectDequeVars` — Python 전용 감지
 
@@ -78,7 +80,7 @@ Java용 enrichment 함수 자체가 없음.
 
 ---
 
-## 증상별 원인 매핑
+## 증상별 원인 매핑 (해결 완료)
 
 | 증상 | 원인 |
 |------|------|
@@ -88,7 +90,7 @@ Java용 enrichment 함수 자체가 없음.
 
 ---
 
-## 규칙 위반 목록
+## 규칙 위반 목록 (해결 완료)
 
 | 파일 | 위치 | 위반 내용 |
 |------|------|----------|
@@ -103,7 +105,7 @@ Java용 enrichment 함수 자체가 없음.
 
 ---
 
-## 개선 로드맵
+## 개선 로드맵 (구현 완료 — 장기 방안으로 바로 적용)
 
 ```mermaid
 flowchart TD
@@ -141,7 +143,7 @@ flowchart TD
 
 ---
 
-## 단기 수정 상세
+## 단기 수정 상세 (건너뜀 — 장기 방안으로 바로 적용)
 
 ### `applyJsArrayHints` 수정 — 이름 기반 제거
 

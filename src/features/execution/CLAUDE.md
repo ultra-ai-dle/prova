@@ -8,8 +8,8 @@
 
 ## Domain Context
 
-- Web Worker 기반 Python(Pyodide)/JS(Acorn) 코드 실행 + trace 수집 엔진
-- 상세 아키텍처: [docs/features/execution.md](../../../docs/features/execution.md)
+- Web Worker 기반 Python(Pyodide)/JS(Acorn) 코드 실행 + Java 원격 실행(`/api/java/execute`) + trace 수집 엔진
+- 상세 아키텍처: [docs/features/execution.md](../../../docs/features/execution.md), [docs/features/java-execution.md](../../../docs/features/java-execution.md)
 
 ## Rules
 

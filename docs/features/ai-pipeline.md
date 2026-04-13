@@ -1,21 +1,15 @@
 # AI Pipeline
 
 ## 한줄 요약
-2-Phase AI 호출: analyze(전략·변수 매핑)→ explain(스텝별 설명·visual_actions) SSE 스트리밍.
+`/api/analyze` 1회 호출로 알고리즘 분류·전략·변수 매핑을 결정하고, 언어별 enrichment 후처리로 보강.
 
 ## 데이터 흐름
 
 ```mermaid
 flowchart LR
-    subgraph Phase1["Phase 1 — /api/analyze (1회)"]
-        A_IN["code + varTypes"] --> A_OUT["AnalyzeMetadata\n{algorithm, strategy,\nvar_mapping, ...}"]
+    subgraph Analyze["/api/analyze (1회)"]
+        A_IN["code + varTypes + language"] --> A_OUT["AnalyzeMetadata\n{algorithm, strategy,\nvar_mapping, special_var_kinds, ...}"]
     end
-
-    subgraph Phase2["Phase 2 — /api/explain (SSE)"]
-        E_IN["rawTrace + algorithm\n+ strategy"] --> E_OUT["AnnotatedStep[]\n(8 step/chunk)"]
-    end
-
-    Phase1 --> Phase2
 ```
 
 ## 모듈 경계
@@ -23,7 +17,6 @@ flowchart LR
 | 엔드포인트 | 입력 | 출력 | 파일 |
 |---|---|---|---|
 | `/api/analyze` | `{code, varTypes, language?}` | `AnalyzeMetadata` (JSON) | app/api/analyze/route.ts |
-| `/api/explain` | `{rawTrace, algorithm, strategy}` | SSE stream: `{index, chunk}` | app/api/explain/route.ts |
 
 ### analyze 서브모듈 (`app/api/analyze/_lib/`)
 
@@ -31,7 +24,10 @@ flowchart LR
 |---|---|
 | `prompt.ts` | 상수(`ANALYZE_CODE_CHAR_LIMIT`, `ANALYZE_GEMINI_SCHEMA`), `compactCodeForAnalyze`, `compactVarTypes` |
 | `normalize.ts` | `normalizeResponse` (AI 응답 → `AnalyzeMetadata`), `fallbackAnalyzeMetadata`, `parseLinearPivots` |
-| `enrichment.ts` | 코드 패턴 보강 6개 (`applyDequeHints`, `enrichSpecialVarKinds` 등) + detect 헬퍼 |
+| `enrichment.ts` | `applyLanguageEnricher` 디스패처 + `applyDirectionMapGuards` + detect 헬퍼 |
+| `enrichers/python.ts` | Python enricher (deque, heapq, stack, visited, distance, unionfind 패턴) |
+| `enrichers/javascript.ts` | JS enricher (push/pop, push/shift 등 연산 패턴) |
+| `enrichers/java.ts` | Java enricher (PriorityQueue, ArrayDeque, boolean[] 등) |
 | `partitionPivotEnrichment.ts` | 퀵소트 피벗 감지 → `pivot_mode: value_in_array` 보강 |
 | `index.ts` | barrel re-export |
 
@@ -51,28 +47,24 @@ flowchart TD
 **지원 프로바이더**: gemini, openai, groq, anthropic, openrouter
 **파일**: `src/lib/ai-providers.ts`
 
-## Analyze 후처리 (코드 패턴 보강)
+## Analyze 후처리 (enrichment 파이프라인)
 
-AI 응답 후 정규식 기반으로 추가 보강 (`_lib/enrichment.ts`):
-- `enrichSpecialVarKinds()` — heapq, deque, path compression, distance init, visited, stack 패턴 감지
-- `enrichLinearPivots()` — two-pointer 패턴 감지
-- `applyDequeHints()` — Python deque → QUEUE/STACK/DEQUE 분류
-- `applyJsArrayHints()` — JS push/pop/shift/unshift → STACK/QUEUE 분류
+AI 응답 후 언어별 enricher + 공통 보강 (`_lib/enrichment.ts`, `_lib/enrichers/`):
+
+```
+enrichAnalyzeMetadataWithPartitionValuePivots → applyLanguageEnricher(언어별)
+→ applyDirectionMapGuards → applyGraphModeInference → enrichLinearPivots
+```
+
+- `applyLanguageEnricher()` — 언어별 디스패처: Python/JS/Java enricher 호출 (연산 패턴 기반 HEAP/QUEUE/STACK/DEQUE/VISITED/DISTANCE/UNIONFIND 감지)
 - `applyDirectionMapGuards()` — 방향 벡터 맵 var_mapping 제거
 - `applyGraphModeInference()` — graph_mode 미지정 시 코드 패턴으로 추론
+- `enrichLinearPivots()` — two-pointer 패턴 감지
 - `enrichAnalyzeMetadataWithPartitionValuePivots()` — 퀵소트 피벗 감지 (`_lib/partitionPivotEnrichment.ts`)
-
-## Explain 청크 전략
-
-- **청크 크기**: 8 step
-- **Delta 압축**: 첫 step만 전체 vars, 나머지는 변경된 값만 전송
-- **SSE 이벤트**: `event: chunk` → `{index: number, chunk: AnnotatedStep[]}`, `event: done` → `{}`
-- **폴백**: AI 전체 실패 시 template 설명 생성 (라인 번호 + 에러 마커만)
 
 ## 핵심 계약 조건
 
 - `var_mapping[].var_name` ∈ `varTypes` 키 (실제 변수명만)
 - `strategy` ∈ `"GRID" | "LINEAR" | "GRID_LINEAR" | "GRAPH"`
-- explain 출력 배열 길이 === 입력 steps 길이 (1:1 대응)
 - 에러 분석 키는 `aiError` 고정 (`runtimeError`와 구분)
 - `visual_actions`에 색상/스타일 포함 금지

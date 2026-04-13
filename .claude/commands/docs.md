@@ -19,7 +19,7 @@ README는 수동 관리 대상이므로 이 커맨드의 범위가 아니다.
      - `docs/architecture.md` — 전체 파이프라인 개요, 모듈 경계 요약, 핵심 제약
      - `docs/features/execution.md` — Worker 실행 엔진
      - `docs/features/trace.md` — trace 수집 + 병합
-     - `docs/features/ai-pipeline.md` — analyze/explain AI 파이프라인
+     - `docs/features/ai-pipeline.md` — analyze AI 파이프라인
      - `docs/features/visualization.md` — 시각화 전략별 구조
    - 각 문서는 `한줄 요약 → 데이터 흐름 → 모듈 경계 → 핵심 제약` 포맷을 따른다.
    - 데이터 흐름 다이어그램은 반드시 Mermaid(` ```mermaid `)로 작성한다 — ASCII 박스 다이어그램 사용 금지.
@@ -33,26 +33,12 @@ README는 수동 관리 대상이므로 이 커맨드의 범위가 아니다.
    - AI 프롬프트에서 참조하는 타입은 특히 정확해야 함
 
    **API 라우트** (`api` 또는 전체):
-   - `/api/analyze`, `/api/explain`의 request/response 스키마 주석
+   - `/api/analyze`, `/api/java/execute`의 request/response 스키마 주석
    - 프롬프트 변경 시 입출력 계약이 주석과 일치하는지 확인
 
    **인라인 주석**:
    - 변경된 파일에서 로직이 자명하지 않은 부분에만 주석 추가
    - 기존 주석이 코드와 불일치하면 수정 또는 제거
-
-   **기획서 싱크 체크** (`sync` 또는 전체):
-   - `prova.md` 기획서와 현재 코드 상태를 비교하여 어긋나는 부분을 경고한다.
-   - 체크 항목:
-     - 기획서에 언급된 지원 언어 vs 실제 Worker 구현 (`public/worker/`)
-     - 기획서의 파이프라인 설명 vs 실제 코드 흐름
-     - 기획서의 시각화 전략 목록 vs 실제 strategy enum 값
-   - 수정은 하지 않는다 — 불일치 목록만 출력한다.
-   - 출력 형식:
-     ```
-     ⚠️ 기획서 싱크 체크
-     - prova.md: "Python 코드를 직접 실행" → 현재 JS 지원도 추가됨
-     - prova.md: 시각화 전략 3종 → 현재 GRID_LINEAR 포함 4종
-     ```
 
 3. **커밋**: 변경된 내용을 바탕으로 아래 형식으로 커밋한다.
 
@@ -65,12 +51,11 @@ docs: {업데이트된 영역} 문서화 업데이트
 docs: 아키텍처, API 라우트 문서화 업데이트
 
 - docs/architecture.md 데이터 흐름 섹션에 JS Worker 경로 추가
-- /api/explain SSE 응답 스키마 주석 추가
+- /api/analyze 응답 스키마 주석 추가
 
 ## 주의사항
 
 - 코드 로직은 변경하지 않는다. 문서와 주석만 다룬다.
 - 불필요한 주석(자명한 코드에 대한 설명)은 추가하지 않는다.
 - `README.md`는 수동 관리한다 — 이 커맨드로 수정하지 않는다.
-- `prova.md` 기획서는 수동 관리 대상이다 — 싱크 체크로 불일치를 알려주지만, 직접 수정하지 않는다.
 - `prompts/` 디렉토리(AI 프롬프트 모음)는 이 커맨드의 범위가 아니다.

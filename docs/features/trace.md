@@ -1,7 +1,7 @@
 # Trace 수집 + 병합
 
 ## 한줄 요약
-Worker가 수집한 rawTrace와 AI가 생성한 annotated를 1:1로 병합하여 mergedTrace를 만든다.
+Worker가 수집한 rawTrace와 annotated를 1:1로 병합하여 mergedTrace를 만든다.
 
 ## 데이터 흐름
 
@@ -9,11 +9,8 @@ Worker가 수집한 rawTrace와 AI가 생성한 annotated를 1:1로 병합하여
 sequenceDiagram
     participant W as Worker
     participant S as Store
-    participant AI as /api/explain
 
     W->>S: rawTrace[]
-    S->>AI: rawTrace + metadata
-    AI-->>S: SSE chunk (8 step) — annotated[]
     Note over S: mergeTrace()<br/>rawTrace[i] + annotated[i]<br/>→ mergedTrace[i]
 ```
 
@@ -26,7 +23,7 @@ sequenceDiagram
 ## 핵심 타입
 
 ```typescript
-RawTraceStep    = {step, line, vars, scope, parent_frames, stdout?, runtimeError?}
+RawTraceStep    = {step, line, vars, scope, parent_frames, stdout?, runtimeError?, event?, returnValue?}
 AnnotatedStep   = {explanation, visual_actions, aiError?}
 MergedTraceStep = RawTraceStep & AnnotatedStep
 ```
@@ -41,5 +38,4 @@ MergedTraceStep = RawTraceStep & AnnotatedStep
 ## 핵심 제약
 
 - 병합 후 `mergedTrace.length === rawTrace.length` 보장 (패딩 포함)
-- AI 청크는 순차 도착 → 도착 시마다 Store에서 re-merge
 - annotated가 rawTrace보다 길면 초과분 무시

@@ -42,7 +42,7 @@
 
 | 중복 대상                                     | 위치                                           | 통합 방안                    |
 | --------------------------------------------- | ---------------------------------------------- | ---------------------------- |
-| `stripCodeFence()` / `stripFence()`           | `analyze/route.ts:55` + `explain/route.ts:51`  | `src/lib/jsonParsing.ts`     |
+| `stripCodeFence()` / `stripFence()`           | `analyze/route.ts` + `explain/route.ts` (통합 완료 → `src/lib/jsonParsing.ts`) | `src/lib/jsonParsing.ts`     |
 | `is2DArray()`                                 | `GraphPanel.tsx:349` + `GridLinearPanel.tsx`   | `src/lib/dataDetection.ts`   |
 | `is2DBitmaskGrid()`                           | `GraphPanel.tsx:1191` + `GridLinearPanel.tsx`  | `src/lib/dataDetection.ts`   |
 | `highlightPythonLine()` / `highlightJsLine()` | `page.tsx:331` + `page.tsx:292` (80% 동일)     | `src/lib/syntaxHighlight.ts` |
