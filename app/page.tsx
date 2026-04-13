@@ -517,8 +517,13 @@ export default function Page() {
         className="shrink-0 h-11 bg-[#161b22] border-b border-prova-line flex items-center px-3 gap-4"
       >
         {/* Logo */}
-        <div className="font-bold text-[15px] tracking-tight shrink-0">
-          Frog<span className="text-prova-green">ger</span>
+        <div className="flex items-baseline gap-1.5 shrink-0">
+          <span className="font-bold text-[15px] tracking-tight">
+            Frog<span className="text-prova-green">ger</span>
+          </span>
+          <span className="text-[10px] text-prova-muted font-mono">
+            v{process.env.NEXT_PUBLIC_APP_VERSION}
+          </span>
         </div>
 
         {/* Status badge — centered */}
