@@ -71,8 +71,8 @@ function runButtonLabel(
 const LAST_EXECUTED_CODE_KEY = "prova:lastExecutedCode";
 const LAST_EXECUTED_STDIN_KEY = "prova:lastExecutedStdin";
 const LAST_SELECTED_LANGUAGE_KEY = "prova:lastSelectedLanguage";
-/** 드롭다운 등으로 언어를 직접 고른 경우 true — 코드 자동 감지로 덮어쓰지 않음 */
 const LAST_LANGUAGE_USER_PINNED_KEY = "prova:lastLanguageUserPinned";
+
 
 export default function Page() {
   const [code, setCode] = useState("");

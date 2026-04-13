@@ -2,60 +2,105 @@
 
 ## 목적
 
-변경된 코드를 기반으로 아키텍처 문서, 인라인 주석, 타입 JSDoc을 업데이트한다.
+- 변경된 코드를 기반으로 아키텍처 문서, 인라인 주석, 타입 JSDoc을 업데이트한다.
+- Markdown은 코드·실제 동작과 어긋나면 오해가 전파된다. **`align` / `audit` 모드**에서는 저장소의 Markdown 전체를 **현재 코드베이스 기준**으로 점검·수정한다. 본문뿐 아니라 **Mermaid 등 다이어그램**도 같은 기준으로 검증한다(그림 오해가 크므로 특히 엄하게). 기존 문서의 주장은 **검증 전까지 신뢰하지 않고**, 소스·설정·타입과 대조한다.
+
 README는 수동 관리 대상이므로 이 커맨드의 범위가 아니다.
 
 ## 입력
 
-- `$ARGUMENTS` — (선택) 특정 영역 지정 (예: `arch`, `types`, `api`). 미지정 시 전체 스캔.
+- `$ARGUMENTS` — (선택) `arch`, `types`, `api`, `sync` 등 영역. 미지정 시 브랜치 diff 기준 전체 스캔.
+- **`align` 또는 `audit`** — 아래 **Markdown 전수 정합성** 절차를 수행한다(`mocks/` 제외, 문서만 수정, 보고서 제출).
 
 ## 실행 절차
 
-1. **변경 감지**: `git diff main...HEAD`로 현재 브랜치에서 변경된 파일 목록을 확인한다.
-2. **영역별 업데이트**:
+### A. 일반 모드 (`align` / `audit` 없음)
+
+1. **변경 감지**: `git diff main...HEAD`로 변경 파일을 확인한다.
+
+2. **영역별 업데이트**
 
    **아키텍처 문서** (`arch` 또는 전체):
    - 문서 구조:
-     - `docs/architecture.md` — 전체 파이프라인 개요, 모듈 경계 요약, 핵심 제약
-     - `docs/features/execution.md` — Worker 실행 엔진
-     - `docs/features/trace.md` — trace 수집 + 병합
-     - `docs/features/ai-pipeline.md` — analyze AI 파이프라인
-     - `docs/features/visualization.md` — 시각화 전략별 구조
-   - 각 문서는 `한줄 요약 → 데이터 흐름 → 모듈 경계 → 핵심 제약` 포맷을 따른다.
-   - 데이터 흐름 다이어그램은 반드시 Mermaid(` ```mermaid `)로 작성한다 — ASCII 박스 다이어그램 사용 금지.
-   - Mermaid 차트 유형: 파이프라인 흐름은 `flowchart`, 시퀀스는 `sequenceDiagram`, 클래스 구조는 `classDiagram`.
+   - `docs/architecture.md` — 파이프라인 개요, 모듈 경계, 제약
+   - `docs/features/execution.md` — Worker 실행
+   - `docs/features/trace.md` — trace + 병합
+   - `docs/features/ai-pipeline.md` — **analyze** 중심. **`POST /api/explain`은 삭제 예정**으로 취급해 제품 흐름·다이어그램에 넣지 않거나 삭제·축약한다.
+   - `docs/features/visualization.md` — 시각화 전략
+   - 포맷: `한줄 요약 → 데이터 흐름 → 모듈 경계 → 핵심 제약`
+   - 다이어그램은 Mermaid만 사용(ASCII 박스 금지). 차트 유형은 `flowchart` / `sequenceDiagram` / `classDiagram` 용도에 맞게 사용.
+   - **다이어그램 검증**:
+     - 브라우저 ↔ Next ↔ 원격 JVM·LLM의 **요청·응답 방향**이 맞는지
+     - Py·JS(Web Worker·`postMessage`)와 Java(`fetch`) 경로가 **혼동 없이** 드러나는지
+     - 클라이언트가 LLM에 **직접** 붙는 잘못된 화살표가 없는지
+     - 실제로는 언어 1개만 실행되는데 동시에 도는 것처럼 보이지 않는지
+     - 수정 후 Mermaid **문법·미리보기**로 화살표를 재검증
    - 변경된 파일이 아키텍처 경계(Worker 메시지, Store shape, API 계약)에 영향을 주면 해당 문서를 반영한다.
    - feature가 추가되면 `docs/features/` 아래에 같은 포맷으로 새 문서를 생성한다.
 
-   **타입 JSDoc** (`types` 또는 전체):
-   - `src/types/prova.ts`의 interface/type에 JSDoc이 누락된 필드 확인
-   - 변경된 타입의 기존 JSDoc이 여전히 정확한지 검증
-   - AI 프롬프트에서 참조하는 타입은 특히 정확해야 함
+   **타입 JSDoc** (`types` 또는 전체): `src/types/prova.ts` 누락·불일치 JSDoc 정리. AI·프롬프트가 참조하는 타입은 우선.
 
    **API 라우트** (`api` 또는 전체):
-   - `/api/analyze`, `/api/java/execute`의 request/response 스키마 주석
+   - `/api/analyze`, `/api/java/execute`의 request/response 스키마 주석 점검
    - 프롬프트 변경 시 입출력 계약이 주석과 일치하는지 확인
+   - explain 라우트 파일이 있어도 문서에서는 **삭제 예정·비노출**로만 다루고, “현재 제품 기능”처럼 부풀리지 않는다.
 
-   **인라인 주석**:
-   - 변경된 파일에서 로직이 자명하지 않은 부분에만 주석 추가
-   - 기존 주석이 코드와 불일치하면 수정 또는 제거
+   **인라인 주석**: 변경 파일에서 비자명한 부분만. 불일치 주석은 수정·삭제.
 
+   **기획서 싱크** (`sync`): `prova.md` vs 코드만 비교해 **불일치 목록 출력**, `prova.md`는 수정하지 않는다.
 3. **커밋**: 변경된 내용을 바탕으로 아래 형식으로 커밋한다.
 
-docs: {업데이트된 영역} 문서화 업데이트
+```
+docs: {영역} 문서화 업데이트
+- {항목}
+```
 
-- {변경 항목 1}
-- {변경 항목 2}
+---
 
-예시:
-docs: 아키텍처, API 라우트 문서화 업데이트
+### B. Markdown 전수 정합성 (`align` / `audit`)
 
-- docs/architecture.md 데이터 흐름 섹션에 JS Worker 경로 추가
-- /api/analyze 응답 스키마 주석 추가
+일반 모드와 달리 **브랜치 diff 없이** `mocks/` 를 제외한 **모든 `*.md`** 를 대상으로 할 수 있다.
 
-## 주의사항
+**범위**: `docs/`, `app/**/CLAUDE.md`, `.cursor/rules/`, `prompts/` 등 저장소 전역의 `.md`. **`mocks/` 내부는 조사·수정하지 않는다.**
 
-- 코드 로직은 변경하지 않는다. 문서와 주석만 다룬다.
-- 불필요한 주석(자명한 코드에 대한 설명)은 추가하지 않는다.
-- `README.md`는 수동 관리한다 — 이 커맨드로 수정하지 않는다.
-- `prompts/` 디렉토리(AI 프롬프트 모음)는 이 커맨드의 범위가 아니다.
+**`/api/explain`**: 삭제 예정. 라우트가 남아 있어도 문서에서는 **없는 API·제공하지 않는 기능**으로 취급한다. 제품·아키텍처·다이어그램·클라이언트 흐름에서는 제거·축약. “향후 연동”“라우트만 존재” 같은 **코드 존재 전제** 서술은 지양하고 분석은 **`/api/analyze` 중심**만 남긴다. 히스토리/내부 메모에 한 줄만 남기는 수준은 예외 가능. 이번 작업에서 **라우트 코드를 지울 의무는 없다** — 문서만 맞춘다.
+
+**진실의 원천(대조 우선순위)**: `src/types/prova.ts` · `src/features/execution/runtime.ts` · `public/worker/*` · `app/api/analyze/route.ts` · `app/api/java/execute/route.ts` · `src/hooks/useProvaExecution.ts` · `src/store/useProvaStore.ts` · `src/lib/ai-providers.ts` · `env.example` 등. `CLAUDE.md` / `docs/features/*` 는 참고만 하고 판단은 구현에 맡긴다. explain 경로는 문서 검증에서 제외.
+
+**체크리스트**: API 경로·필드명이 타입·라우트와 일치하는지 · 디버깅 1회 `fetch` 횟수 등은 `runtime`·`useProvaExecution` 기준 · Worker·postMessage·Java 원격 혼동 없는지 · explain은 위 정책 · `callWithFallback`/`AI_PROVIDER` 와 모순되는 “단일 프로바이더만” 같은 단정 수정 · **다이어그램**은 위 다이어그램 항목과 동일하게 엄격히 · 폴더·파일 경로 실존 여부.
+
+**수정 방식**: 사실만 바로잡기. 불확실하면 문서에 파일 경로·“현재 `src` 기준” 한 줄을 남긴다. 루트 `README`·기획서 등 수동 파일은 수정 전 확인 또는 사용자에게 확인.
+
+**금지 (`align` / `audit` 한정)**  
+- **코드·라우트·워커·설정 스크립트는 한 줄도 바꾸지 않는다.** 문서를 맞추려고 구현을 고치지 않는다(리팩터·버그 수정·포맷·주석·미사용 삭제 포함). 방향은 **코드 → 문서** 단방향.  
+- 코드 버그를 발견해도 여기서 고치지 않고 **별도 이슈**로만 적는다.  
+- 추측 금지 — 파일을 열어 확인한다.  
+- explain 문서를 새로 늘리거나 “구현됨”처럼 쓰지 않는다.
+
+**검증**: 문서에 나온 API·타입명을 grep 등으로 존재 확인. 다이어그램은 파싱 오류 없음·화살표와 본문 모순 없음.
+
+**산출물 — 보고서 필수**  
+작업 종료 후 채팅 또는 이슈에 **가독성 있게** 제출한다. 1~3문장 요약만으로 끝내지 않는다.
+
+1. **요약(3~8문장)**: `mocks/` 제외 범위, 검토·수정한 `.md` 개수, 다이어그램 수정 파일 수, **코드는 수정하지 않았음** 한 줄.  
+2. **변경 표**: 열 예시 — 파일 경로 | 문서상 문제 | 수정 내용 | 근거(대조한 코드 경로). 수정한 파일은 빠지지 않게.  
+3. **다이어그램만 수정한 경우**: 파일별 잘못된 노드·화살표와 수정 요지.  
+4. **미수정·보류**: 이유(수동 관리·시간 등), 문서에 남긴 가정.  
+5. **코드에서만 발견·문서 작업으로는 고치지 않은 항목**: 별도 이슈 권장 bullet.  
+6. **검증 메모(선택)**: grep·열람 근거 한 줄씩.
+
+미해결·환경 의존 가정은 보고서의 미수정·보류에 적는다.
+
+**완료 조건**: `mocks/` 제외 `.md`에 체크리스트 반영, 다이어그램 포함 파일은 흐름·문법 일치, 위 보고서 제출.
+
+이후 **커밋**은 일반 모드와 동일한 메시지 규칙을 쓴다.
+
+---
+
+## 주의사항 (일반 모드)
+
+- **실행 로직은 변경하지 않는다.** 문서·주석·JSDoc만.
+- **`align` / `audit`이 아닐 때**는 주석·JSDoc을 소스에 반영할 수 있으나 **로직 변경 금지**.
+- 불필요한 주석 금지.
+- `README.md` — 이 커맨드로 수정하지 않는다.
+- `prova.md` — 싱크 체크만, 직접 수정하지 않는다.
