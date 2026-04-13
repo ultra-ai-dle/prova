@@ -28,11 +28,27 @@ function extractVarTypesUnion(rawTrace: RawTraceStep[]): Record<string, string> 
 // ─── 컴파일 에러 파싱 ─────────────────────────────────────────────────────────
 
 // "Main.java:12: error: ';' expected"
-const COMPILE_ERROR_RE = /^Main\.java:(\d+):\s*error:\s*(.+)/m;
+// "Main.java:12: 오류: ';'이 필요합니다"
+// "Foo.java:12: error: ';' expected"
+// "/tmp/tmpabc.java:12: error: ';' expected"
+const COMPILE_ERROR_RE = /^(?:.+\/)?[^:\n]+\.java:(\d+):\s*(?:error|오류)\s*:?\s*(.+)/m;
+const COMPILE_LINE_ONLY_RE = /^(?:.+\/)?[^:\n]+\.java:(\d+):/m;
 
 function parseCompileError(stderr: string) {
   const match = stderr.match(COMPILE_ERROR_RE);
-  if (!match) return null;
+  if (!match) {
+    const lineOnly = stderr.match(COMPILE_LINE_ONLY_RE);
+    if (!lineOnly) return null;
+    const firstNonEmpty = stderr
+      .split("\n")
+      .map((s) => s.trim())
+      .find((s) => s.length > 0) ?? "컴파일 오류";
+    return {
+      type: "CompileError",
+      message: firstNonEmpty,
+      line: parseInt(lineOnly[1], 10),
+    };
+  }
   return {
     type:    "CompileError",
     message: match[2].trim(),
@@ -44,7 +60,7 @@ function parseCompileError(stderr: string) {
 
 // "Exception in thread "main" java.lang.NullPointerException: ..."
 const EXCEPTION_RE = /^(?:Exception in thread\s+"\w+"?\s+)?(\w[\w.]*Exception[\w.]*):\s*(.*)/m;
-const AT_LINE_RE   = /\bat Main\.main\(Main\.java:(\d+)\)/;
+const AT_LINE_RE   = /\bat\s+[\w.$]+\.main\([^:\n]+\.java:(\d+)\)/;
 
 function parseRuntimeError(stderr: string, fallbackLine: number, resultLineMap?: number[]) {
   const exMatch = stderr.match(EXCEPTION_RE);
@@ -80,7 +96,15 @@ export function parseJavaCompileErrorPayload(stderr: string, resultLineMap?: num
         // 계기화 코드 라인 → 원본 라인으로 역매핑
         line:    resultLineMap ? (resultLineMap[raw.line - 1] ?? raw.line) : raw.line,
       }
-    : { type: "CompileError", message: stderr.trim() || "컴파일 오류", line: 1 };
+    : {
+        type: "CompileError",
+        message:
+          stderr
+            .split("\n")
+            .map((s) => s.trim())
+            .find((s) => s.length > 0) ?? "컴파일 오류",
+        line: 1,
+      };
 
   const step: RawTraceStep = {
     step:          0,
@@ -171,9 +195,9 @@ export function parseJavaTrace(
   const varTypes: Record<string, string>  = extractVarTypesUnion(rawTrace);
   const branchLines: BranchLines          = { loop: [], branch: [] };
 
-  // I/O 유틸리티 변수(Scanner, BufferedReader 등)를 varTypes에서 제거
+  // I/O 유틸리티 변수(Scanner, StringTokenizer, BufferedReader 등)를 varTypes에서 제거
   // — value 패턴으로 판단하며 변수명에 의존하지 않는다
-  const JAVA_IO_RE = /^java\.(util\.Scanner\b|io\.(Buffered(?:Reader|Writer)|InputStreamReader|PrintWriter|StreamTokenizer)\b)/;
+  const JAVA_IO_RE = /^java\.(util\.(Scanner|StringTokenizer)\b|io\.(Buffered(?:Reader|Writer)|InputStreamReader|PrintWriter|StreamTokenizer)\b)/;
   for (const step of rawTrace) {
     for (const [key, val] of Object.entries(step.vars ?? {})) {
       if (typeof val === "string" && JAVA_IO_RE.test(val)) {

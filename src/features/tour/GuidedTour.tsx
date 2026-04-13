@@ -249,20 +249,20 @@ export function GuidedTour() {
 
         <div className="p-4">
           {/* Step indicator */}
-          <span className="text-[10px] text-[#8b949e] font-mono">
+          <span className="text-[10px] text-[#9aa4b2] font-mono">
             {currentStep + 1} / {TOUR_STEPS.length}
           </span>
 
           {/* Content */}
           <h3 className="mt-2 text-[14px] font-bold text-white">{localizedStep.title}</h3>
-          <p className="mt-1 text-[12px] text-[#8b949e] leading-relaxed whitespace-pre-line">
+          <p className="mt-1 text-[12px] text-[#b4bfcc] leading-relaxed whitespace-pre-line">
             {localizedStep.body}
           </p>
 
           {/* Buttons */}
           <div className="mt-4 flex items-center justify-between">
             <button
-              className="text-[12px] text-[#8b949e] hover:text-[#c9d1d9] transition-colors"
+              className="text-[12px] text-[#b4bfcc] hover:text-white transition-colors"
               onClick={endTour}
             >
               {t.tour_skip}

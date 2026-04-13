@@ -180,8 +180,13 @@ export default function Page() {
   );
   const isCodeEmpty = code.trim().length === 0;
   const isStdinEmpty = lang(inferredLanguage).py && stdin.trim().length === 0;
+  const javaFileName = useMemo(() => {
+    if (!lang(language).java) return null;
+    const m = code.match(/\bpublic\s+class\s+([A-Za-z_]\w*)/);
+    return m?.[1] ? `${m[1]}.java` : "Algorithm.java";
+  }, [code, language]);
   const isAnalyzingCode =
-    pyodideStatus === "running" && !metadata && rawTrace.length > 0;
+    pyodideStatus === "running" && !metadata;
   const displayTags = useMemo(
     () => normalizeAndDedupeTags(metadata?.tags ?? [], 20),
     [metadata?.tags],
@@ -449,11 +454,7 @@ export default function Page() {
   });
 
   const headerBadge = useMemo(() => {
-    if (isRunning)
-      return {
-        text: t.header_badge_analyzing,
-        style: "border-[#e3b341]/40 bg-[#3d2b00]/60 text-[#e3b341]",
-      };
+    if (isRunning) return { text: "", style: "" };
     if (isFallback)
       return {
         text: t.header_badge_fallback,
@@ -614,7 +615,7 @@ export default function Page() {
                   {lang(language).js
                     ? "algorithm.js"
                     : lang(language).java
-                      ? "Algorithm.java"
+                      ? (javaFileName ?? "Algorithm.java")
                       : "algorithm.py"}
                 </span>
                 {isVisualizing && (
@@ -1151,7 +1152,7 @@ export default function Page() {
                     <div className="text-center">
                       <div className="mx-auto mb-4 h-9 w-9 rounded-full border-2 border-[#2f81f7]/25 border-t-[#58a6ff] animate-spin" />
                       <p className="text-sm font-medium text-[#c9d1d9]">
-                        코드 분석중...
+                        알고리즘 분석 중...
                       </p>
                       <p className="mt-2 text-xs text-prova-muted">
                         AI 응답을 기다리는 중입니다.

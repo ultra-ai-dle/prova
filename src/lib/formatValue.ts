@@ -25,6 +25,14 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function classObjectParts(value: unknown): { className: string; fields: Array<[string, unknown]> } | null {
+  if (!isPlainObject(value)) return null;
+  const classRaw = (value as Record<string, unknown>).__class;
+  if (typeof classRaw !== "string" || classRaw.trim().length === 0) return null;
+  const fields = Object.entries(value).filter(([k]) => k !== "__class");
+  return { className: classRaw.trim(), fields };
+}
+
 // ── 스칼라 포맷 ───────────────────────────────────────────────────────────────
 
 export function formatScalar(value: unknown, bitmaskMode = false, bitWidth = 1) {
@@ -83,6 +91,16 @@ export function toJsonLike(value: unknown, depth = 0, bitmaskMode = false, bitWi
     const tail = value.length > 16 ? `${nextIndent}"...(+${value.length - 16})"` : "";
     return `[\n${[...items, ...(tail ? [tail] : [])].join(",\n")}\n${indent}]`;
   }
+  const classParts = classObjectParts(value);
+  if (classParts) {
+    const { className, fields } = classParts;
+    if (fields.length === 0) return `${className} : {}`;
+    const rows = fields.slice(0, 24).map(
+      ([k, v]) => `${nextIndent}${k}: ${toJsonLike(v, depth + 1, bitmaskMode, bitWidth)}`
+    );
+    if (fields.length > 24) rows.push(`${nextIndent}...: +${fields.length - 24} fields`);
+    return `${className} : {\n${rows.join(",\n")}\n${indent}}`;
+  }
   if (isPlainObject(value)) {
     const entries = Object.entries(value);
     if (entries.length === 0) return "{}";
@@ -107,6 +125,11 @@ export function toJsonCompact(value: unknown, bitmaskMode = false, bitWidth = 1)
   if (typeof value === "string") return JSON.stringify(value);
   if (Array.isArray(value)) {
     return `[${value.map((v) => toJsonCompact(v, bitmaskMode, bitWidth)).join(", ")}]`;
+  }
+  const classParts = classObjectParts(value);
+  if (classParts) {
+    const { className, fields } = classParts;
+    return `${className} : { ${fields.map(([k, v]) => `${k}: ${toJsonCompact(v, bitmaskMode, bitWidth)}`).join(", ")} }`;
   }
   if (isPlainObject(value)) {
     const entries = Object.entries(value).sort(([a], [b]) => a.localeCompare(b));
@@ -150,7 +173,7 @@ export function formatWithBitMode(
       value >= 0
     )
   ) {
-    return JSON.stringify(value);
+    return toJsonPreferSingleLine(value, 120, bitmaskMode, bitWidth);
   }
   const bin = value.toString(2).padStart(Math.max(1, bitWidth), "0");
   return `${value} (${bin})`;

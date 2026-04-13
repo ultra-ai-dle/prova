@@ -895,6 +895,16 @@ export function GraphPanel({
               BINARY_TREE: "BIN-TREE", SEGMENT_TREE: "SEG-TREE",
             };
             const specialBadge = SPECIAL_BADGE_MAP[structure.kind] ?? null;
+            const classBadge = (() => {
+              if (!isSpecial || !Array.isArray(structure.value)) return null;
+              const firstObj = (structure.value as unknown[]).find((item) => isPlainObject(item)) as
+                | Record<string, unknown>
+                | undefined;
+              const className = firstObj?.__class;
+              return typeof className === "string" && className.trim().length > 0
+                ? className.trim()
+                : null;
+            })();
 
             const graphForThisKey = structure.graph ?? { nodes: [], links: [] };
             const structurallyTree = isStructuralTree(graphForThisKey);
@@ -908,6 +918,11 @@ export function GraphPanel({
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <div className="text-[10px] text-[#9ac7ff] uppercase tracking-widest">{structure.key}</div>
+                  {classBadge && (
+                    <span className="text-[8px] font-bold px-1.5 py-[2px] rounded border border-[#8b949e]/30 bg-[#111a24] text-[#c9d1d9] uppercase tracking-wider">
+                      {classBadge}
+                    </span>
+                  )}
                   {specialBadge && (
                     <span className="text-[8px] font-bold px-1.5 py-[2px] rounded border border-[#58a6ff]/30 bg-[#0c1f35] text-[#58a6ff] uppercase tracking-wider">
                       {specialBadge}
@@ -1117,7 +1132,9 @@ export function GraphPanel({
                       )}
                     </pre>
                   ) : (
-                    <div className="text-[11px] font-mono text-[#c9d1d9]">{JSON.stringify(structure.value)}</div>
+                    <div className="text-[11px] font-mono text-[#c9d1d9]">
+                      {toJsonPreferSingleLine(structure.value, 120, bitmaskMode, bitWidth)}
+                    </div>
                   )}
                 </div>
               )}
