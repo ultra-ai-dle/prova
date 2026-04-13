@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import type { MergedTraceStep } from "@/types/prova";
 import { IconBug } from "@/components/icons";
+import { useT } from "@/i18n";
 
 type Props = {
   steps: MergedTraceStep[];
@@ -25,6 +26,7 @@ export function TimelineControls({
   onTogglePlay,
   onSpeedChange,
 }: Props) {
+  const t = useT();
   const disabled = isRunning || steps.length === 0;
   const atStart = disabled || currentStep === 0;
   const atEnd = disabled || currentStep >= steps.length - 1;
@@ -39,10 +41,10 @@ export function TimelineControls({
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium">
-          Debug Controls
+          {t.timeline_label}
         </span>
         <span className="text-[10px] text-prova-muted font-mono">
-          Step {steps.length > 0 ? currentStep + 1 : 0} / {steps.length}
+          {t.timeline_step(steps.length > 0 ? currentStep + 1 : 0, steps.length)}
         </span>
       </div>
 
@@ -63,17 +65,17 @@ export function TimelineControls({
           className="h-7 px-2 flex items-center justify-center rounded border border-prova-line bg-prova-panel text-prova-muted hover:text-white disabled:opacity-30 text-[10px] font-mono"
           onClick={() => onStepChange(currentStep - 1)}
           disabled={atStart}
-          aria-label="Previous step"
+          aria-label={t.timeline_prev}
         >
-          Prev
+          {t.timeline_prev}
         </button>
         <button
           className="h-7 px-2 flex items-center justify-center rounded border border-prova-line bg-prova-panel text-prova-muted hover:text-white disabled:opacity-30 text-[10px] font-mono"
           onClick={onTogglePlay}
           disabled={disabled}
-          aria-label={isPlaying ? "Pause" : "Play"}
+          aria-label={isPlaying ? t.timeline_pause : t.timeline_play}
         >
-          {isPlaying ? "Pause" : "Play"}
+          {isPlaying ? t.timeline_pause : t.timeline_play}
         </button>
         <button
           className={`h-7 px-2 flex items-center justify-center rounded border transition-colors text-[10px] font-mono ${
@@ -83,9 +85,9 @@ export function TimelineControls({
           }`}
           onClick={() => onStepChange(currentStep + 1)}
           disabled={atEnd}
-          aria-label="Next step"
+          aria-label={t.timeline_next}
         >
-          Next
+          {t.timeline_next}
         </button>
 
         {errorStepIndex >= 0 && (
@@ -93,14 +95,15 @@ export function TimelineControls({
             className="h-7 w-7 flex items-center justify-center rounded border border-prova-red/40 bg-[#2d1112]/60 text-prova-red hover:bg-[#3d1a1a] transition-colors disabled:opacity-30"
             onClick={() => onStepChange(errorStepIndex)}
             disabled={disabled}
-            aria-label="Jump to error"
+            aria-label={t.timeline_jumpToError}
+            title={t.timeline_jumpToError}
           >
             <IconBug />
           </button>
         )}
 
         <div className="ml-auto flex items-center gap-1">
-          <span className="text-[10px] text-prova-muted">Speed</span>
+          <span className="text-[10px] text-prova-muted">{t.timeline_speed}</span>
           <select
             className="h-7 rounded border border-prova-line bg-[#161b22] text-[10px] text-[#c9d1d9] px-1 focus:outline-none disabled:opacity-40"
             value={speed}

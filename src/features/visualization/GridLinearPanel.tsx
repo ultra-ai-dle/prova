@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { LinearPivotSpec, MergedTraceStep } from "@/types/prova";
 import { GridIcon } from "@/components/icons";
+import { useT } from "@/i18n";
 import { ThreeDVolumePanel } from "@/features/visualization/ThreeDVolumePanel";
 import {
   formatLinearAlgoContext,
@@ -141,6 +142,7 @@ export function GridLinearPanel({
 }: Props) {
   // 셀 클릭 상세 표시: { gridName, row, col }
   const [selectedCell, setSelectedCell] = useState<{ gridName: string; row: number; col: number } | null>(null);
+  const t = useT();
 
   if (!step) {
     return (
@@ -148,13 +150,10 @@ export function GridLinearPanel({
         <GridIcon />
         <div>
           <p className="text-sm text-[#c9d1d9] mb-2 font-medium">
-            Visualization will appear here after execution
+            {t.viz_emptyTitle}
           </p>
           <p className="text-xs text-prova-muted leading-relaxed">
-            Automatically detects <span className="text-[#58a6ff]">BFS</span>,{" "}
-            <span className="text-[#58a6ff]">DFS</span>,{" "}
-            <span className="text-[#58a6ff]">Stacks</span>,{" "}
-            <span className="text-[#58a6ff]">Queues</span>, and Grid traversals.
+            {t.viz_emptyBody}
           </p>
         </div>
       </div>

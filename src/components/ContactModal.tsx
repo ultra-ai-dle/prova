@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useT } from "@/i18n";
 
 interface ContactModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export function ContactModal({
   currentCode,
   currentStdin,
 }: ContactModalProps) {
+  const t = useT();
   const [message, setMessage] = useState("");
   const [replyEmail, setReplyEmail] = useState("");
   const [includeCode, setIncludeCode] = useState(false);
@@ -94,12 +96,12 @@ export function ContactModal({
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-prova-line">
           <span className="text-[14px] font-semibold text-[#e6edf3]">
-            버그 제보 / 문의하기
+            {t.contact_title}
           </span>
           <button
             className="w-6 h-6 flex items-center justify-center rounded text-prova-muted hover:text-[#e6edf3] hover:bg-[#21262d] transition-colors"
             onClick={handleClose}
-            aria-label="닫기"
+            aria-label={t.contact_close}
           >
             ✕
           </button>
@@ -109,37 +111,39 @@ export function ContactModal({
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
             <span className="text-2xl">✅</span>
             <p className="text-[14px] text-[#e6edf3] font-medium">
-              문의가 전송되었습니다!
+              {t.contact_successTitle}
             </p>
             <p className="text-[12px] text-prova-muted">
-              소중한 피드백 감사합니다. 빠르게 확인하겠습니다.
+              {t.contact_successMessage}
               {replyEmail.trim().length > 0 && (
-                <><br />수정 완료 후 <span className="text-[#58a6ff]">{replyEmail.trim()}</span>로 회신드릴게요.</>
+                <>
+                  <br />
+                  <span className="text-[#58a6ff]">
+                    {t.contact_successReply(replyEmail.trim())}
+                  </span>
+                </>
               )}
             </p>
             <button
               className="mt-2 px-4 py-1.5 text-[12px] rounded-md bg-[#21262d] border border-prova-line text-[#c9d1d9] hover:bg-[#262c36] transition-colors"
               onClick={handleClose}
             >
-              닫기
+              {t.contact_close}
             </button>
           </div>
         ) : (
           <div className="flex flex-col gap-4 px-4 py-4">
             {/* Description */}
             <p className="text-[12px] text-prova-muted leading-relaxed">
-              버그, 개선 의견, 뭐든 좋아요.{" "}
-              <span className="text-[#58a6ff]">어떤 버그도 환영합니다.</span>{" "}
-              재현 방법이나 증상을 최대한 구체적으로 적어주시면 더 빠르게 고칠
-              수 있어요.
+              {t.contact_description}{" "}
+              <span className="text-[#58a6ff]">{t.contact_descriptionHighlight}</span>{" "}
+              {t.contact_descriptionSuffix}
             </p>
 
             {/* Message textarea */}
             <textarea
               className="w-full h-36 rounded-md border border-prova-line bg-[#161b22] text-[12px] font-mono text-[#c9d1d9] p-3 resize-none placeholder:text-prova-muted focus:outline-none focus:border-[#58a6ff]/60 transition-colors"
-              placeholder={
-                "예) 버블 정렬 코드 실행 후 3번 줄에 에러 하이라이트가 잘못 표시됩니다.\n\n재현 방법:\n1. ...\n2. ..."
-              }
+              placeholder={t.contact_messagePlaceholder}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               disabled={sendState === "sending"}
@@ -149,13 +153,15 @@ export function ContactModal({
             {/* Reply email (optional) */}
             <div className="flex flex-col gap-1">
               <label className="text-[12px] text-[#c9d1d9]">
-                회신 이메일{" "}
-                <span className="text-prova-muted font-normal">(선택)</span>
+                {t.contact_replyEmailLabel}{" "}
+                <span className="text-prova-muted font-normal">
+                  {t.contact_replyEmailOptional}
+                </span>
               </label>
               <input
                 type="email"
                 className="w-full rounded-md border border-prova-line bg-[#161b22] text-[12px] text-[#c9d1d9] px-3 py-2 placeholder:text-prova-muted focus:outline-none focus:border-[#58a6ff]/60 transition-colors disabled:opacity-40"
-                placeholder="수정 완료 후 회신을 원하시면 이메일을 입력해주세요"
+                placeholder={t.contact_replyEmailPlaceholder}
                 value={replyEmail}
                 onChange={(e) => setReplyEmail(e.target.value)}
                 disabled={sendState === "sending"}
@@ -175,14 +181,13 @@ export function ContactModal({
               />
               <div className="flex flex-col gap-0.5">
                 <span className="text-[12px] text-[#c9d1d9] group-hover:text-[#e6edf3] transition-colors">
-                  에디터 코드 함께 첨부하기
+                  {t.contact_includeCodeLabel}
                 </span>
                 <span className="text-[11px] text-prova-muted">
-                  버그 재현에 코드가 있으면 훨씬 도움이 됩니다. 협조해 주셔서
-                  감사합니다 🐸
+                  {t.contact_includeCodeHint}
                   {currentCode.trim().length === 0 && (
                     <span className="ml-1 text-[#f85149]">
-                      (에디터가 비어 있습니다)
+                      {t.contact_includeCodeEmpty}
                     </span>
                   )}
                 </span>
@@ -201,7 +206,7 @@ export function ContactModal({
                 onClick={handleClose}
                 disabled={sendState === "sending"}
               >
-                취소
+                {t.contact_cancel}
               </button>
               <button
                 className={`px-4 py-1.5 text-[12px] rounded-md font-medium transition-colors ${
@@ -214,7 +219,7 @@ export function ContactModal({
                   message.trim().length === 0 || sendState === "sending"
                 }
               >
-                {sendState === "sending" ? "전송 중..." : "문의 보내기"}
+                {sendState === "sending" ? t.contact_submitting : t.contact_submit}
               </button>
             </div>
           </div>

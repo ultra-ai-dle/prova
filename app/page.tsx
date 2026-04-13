@@ -13,6 +13,7 @@ import { GuidedTour } from "@/features/tour/GuidedTour";
 import { useTourStore } from "@/features/tour/useTourStore";
 import {
   IconFiles,
+  IconSettings,
   IconRefresh,
   IconExpand,
   IconWarning,
@@ -46,26 +47,30 @@ import { useDragResize } from "@/hooks/useDragResize";
 import { useProvaExecution } from "@/hooks/useProvaExecution";
 import { TimelineControls } from "@/features/playback/TimelineControls";
 import { DebugCodeEditor } from "@/components/DebugCodeEditor";
+import { useT } from "@/i18n";
+import type { Translations } from "@/i18n";
+import { useLocaleStore } from "@/store/useLocaleStore";
 
 /* ── Helpers ─────────────────────────────────────────────── */
 function runButtonLabel(
+  t: Translations,
   status: string,
   hasTrace: boolean,
   isCodeEmpty: boolean,
   isStdinEmpty: boolean,
   language = "python",
 ) {
-  if (isCodeEmpty) return "코드를 입력하세요";
-  if (isStdinEmpty) return "예시 입력을 입력하세요";
+  if (isCodeEmpty) return t.run_enterCode;
+  if (isStdinEmpty) return t.run_enterStdin;
   if (status === "loading") {
-    if (lang(language).js) return "JS 환경 준비 중...";
-    if (lang(language).java) return "Java 환경 준비 중...";
-    return "Python 준비 중...";
+    if (lang(language).js) return t.run_loadingJs;
+    if (lang(language).java) return t.run_loadingJava;
+    return t.run_loadingPy;
   }
-  if (status === "running") return "디버깅 중...";
-  if (status === "reinitializing") return "초기화 중...";
-  if (status === "error") return "디버깅 불가";
-  return hasTrace ? "▶ 디버깅 다시 실행" : "▶ 디버깅 시작";
+  if (status === "running") return t.run_running;
+  if (status === "reinitializing") return t.run_reinitializing;
+  if (status === "error") return t.run_error;
+  return hasTrace ? t.run_rerun : t.run_start;
 }
 
 const LAST_EXECUTED_CODE_KEY = "prova:lastExecutedCode";
@@ -105,6 +110,13 @@ export default function Page() {
   const [editCursorLine, setEditCursorLine] = useState(1);
   const [bitmaskMode, setBitmaskMode] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
+  const t = useT();
+  const { locale, setLocale, hydrateFromStorage } = useLocaleStore();
+
+  useEffect(() => {
+    hydrateFromStorage();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const gallery = useGallery();
   const {
     splitRootRef,
@@ -440,21 +452,21 @@ export default function Page() {
   const headerBadge = useMemo(() => {
     if (isRunning)
       return {
-        text: "알고리즘 분석 중...",
+        text: t.header_badge_analyzing,
         style: "border-[#e3b341]/40 bg-[#3d2b00]/60 text-[#e3b341]",
       };
     if (isFallback)
       return {
-        text: "○ 알고리즘 감지 실패",
+        text: t.header_badge_fallback,
         style: "border-prova-line text-prova-muted",
       };
     if (metadata?.display_name)
       return { text: "", style: "border-prova-line text-prova-muted" };
     return {
-      text: "WAITING FOR EXECUTION...",
+      text: t.header_badge_waiting,
       style: "border-prova-line text-prova-muted",
     };
-  }, [isFallback, isRunning, metadata?.display_name]);
+  }, [isFallback, isRunning, metadata?.display_name, t]);
 
   return (
     <div className="h-screen flex flex-col bg-prova-bg text-[#e6edf3] overflow-hidden">
@@ -477,17 +489,16 @@ export default function Page() {
             <span>
               {pyodideStatus === "error" &&
                 (lang(language).js
-                  ? "JS 환경 초기화에 실패했습니다. 페이지를 새로고침해 주세요."
+                  ? t.banner_jsInitFailed
                   : lang(language).java
-                    ? "Java 실행 환경에 연결하지 못했습니다. 설정을 확인하거나 잠시 후 다시 시도해 주세요."
-                    : "Python 환경 초기화에 실패했습니다. 페이지를 새로고침해 주세요.")}
-              {isFallback &&
-                "AI 연결에 실패했습니다. 기본 변수 뷰로 코드 흐름을 추적합니다."}
+                    ? t.banner_javaConnectFailed
+                    : t.banner_pyInitFailed)}
+              {isFallback && t.banner_aiFailed}
               {!isFallback &&
                 globalError &&
                 (globalError.type === "RUNTIME"
-                  ? `실행 오류: ${globalError.message}`
-                  : `AI 분석 실패: ${globalError.message}`)}
+                  ? t.banner_runtimeError(globalError.message)
+                  : t.banner_aiError(globalError.message))}
             </span>
           </div>
           {pyodideStatus === "error" && (
@@ -495,7 +506,7 @@ export default function Page() {
               className="border border-current rounded px-3 py-1 hover:bg-white/10 transition-colors"
               onClick={() => window.location.reload()}
             >
-              새로고침
+              {t.banner_reload}
             </button>
           )}
         </div>
@@ -524,8 +535,8 @@ export default function Page() {
 
         <button
           className="w-7 h-7 flex items-center justify-center rounded text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors shrink-0"
-          aria-label="문의하기"
-          title="문의하기"
+          aria-label={t.header_contact}
+          title={t.header_contact}
           onClick={() => setContactOpen(true)}
         >
           <IconMail />
@@ -533,19 +544,27 @@ export default function Page() {
         <button
           className="w-7 h-7 flex items-center justify-center rounded text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors shrink-0"
           data-tour="gallery"
-          aria-label="예제 갤러리"
-          title="예제 갤러리"
+          aria-label={t.header_gallery}
+          title={t.header_gallery}
           onClick={gallery.open}
         >
           <IconFiles />
         </button>
         <button
-          className="w-[22px] h-[22px] flex items-center justify-center rounded-full border border-[#8b949e]/40 bg-[#21262d] text-[11px] font-extrabold text-[#8b949e] hover:border-[#8b949e]/70 hover:bg-[#30363d] hover:text-[#c9d1d9] transition-colors shrink-0"
-          aria-label="가이드 투어"
-          title="가이드 투어"
+          className="w-7 h-7 flex items-center justify-center rounded text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors shrink-0"
+          aria-label={t.header_guidedTour}
+          title={t.header_guidedTour}
           onClick={() => useTourStore.getState().startTour()}
         >
-          ?
+          <IconSettings />
+        </button>
+        <button
+          className="h-7 px-2 rounded border border-prova-line bg-[#21262d] text-[10px] font-mono text-[#c9d1d9] hover:border-[#58a6ff]/40 transition-colors shrink-0"
+          aria-label={t.locale_switchTitle}
+          title={t.locale_switchTitle}
+          onClick={() => setLocale(locale === "ko" ? "en" : "ko")}
+        >
+          {t.locale_switchTo}
         </button>
       </header>
 
@@ -619,19 +638,19 @@ export default function Page() {
                     setLanguageUserPinned(true);
                     setLanguage(e.target.value as SupportedLanguage);
                   }}
-                  aria-label="코드 언어 선택"
+                  aria-label={t.editor_langLabel}
                 >
                   <option value="python">Python</option>
                   <option value="javascript">JavaScript</option>
                   <option value="java">Java</option>
                   <option value="cpp" disabled>
-                    C++ (준비중)
+                    {t.editor_cppDisabled}
                   </option>
                 </select>
                 <button
                   className="h-7 px-2 rounded border border-prova-line bg-[#21262d] text-[10px] font-mono text-[#c9d1d9] hover:border-[#58a6ff]/40 transition-colors"
                   onClick={() => applyTabSizeToCode(tabSize === 2 ? 4 : 2)}
-                  title={`현재 Tab ${tabSize} — 클릭하여 Tab ${tabSize === 2 ? 4 : 2}로 전환`}
+                  title={t.editor_tabTitle(tabSize, tabSize === 2 ? 4 : 2)}
                 >
                   Tab {tabSize}
                 </button>
@@ -665,8 +684,8 @@ export default function Page() {
                       setPlaying(false);
                       setUiMode("ready");
                     }}
-                    title="편집 모드로 전환"
-                    aria-label="편집 모드로 전환"
+                    title={t.editor_editMode}
+                    aria-label={t.editor_editMode}
                   >
                     <IconPencil />
                   </button>
@@ -678,8 +697,8 @@ export default function Page() {
                       : "border-prova-line bg-prova-panel/80 text-prova-muted hover:text-[#c9d1d9] hover:border-[#58a6ff]/40"
                   }`}
                   onClick={() => setWordWrap((v) => !v)}
-                  title={wordWrap ? "줄 바꿈 끄기" : "줄 바꿈 켜기"}
-                  aria-label="줄 바꿈 토글"
+                  title={wordWrap ? t.editor_wordWrapOn : t.editor_wordWrapOff}
+                  aria-label={wordWrap ? t.editor_wordWrapOn : t.editor_wordWrapOff}
                 >
                   <svg
                     width="12"
@@ -708,8 +727,8 @@ export default function Page() {
                     setCopied(true);
                     setTimeout(() => setCopied(false), 1500);
                   }}
-                  title={copied ? "복사됨!" : "코드 복사"}
-                  aria-label="코드 복사"
+                  title={copied ? t.editor_copied : t.editor_copy}
+                  aria-label={t.editor_copy}
                 >
                   {copied ? (
                     <svg
@@ -758,10 +777,10 @@ export default function Page() {
                           className={`pl-2 text-prova-muted ${wordWrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"}`}
                         >
                           {lang(language).js
-                            ? "여기에 JavaScript 코드를 입력하세요."
+                            ? t.editor_placeholderJs
                             : lang(language).java
-                              ? "여기에 Java 코드를 입력하세요."
-                              : "여기에 Python 코드를 입력하세요."}
+                              ? t.editor_placeholderJava
+                              : t.editor_placeholderPy}
                         </span>
                       </div>
                     ) : (
@@ -897,10 +916,10 @@ export default function Page() {
             <div className="shrink-0 px-3 py-2 border-t border-prova-line bg-[#0f141a]">
               <span className="text-[10px] text-prova-muted font-mono">
                 {lang(language).js
-                  ? "JavaScript ES2022 · 동기 코드만 지원 · async/await 미지원"
+                  ? t.editor_langBadgeJs
                   : lang(language).java
-                    ? "Java · 외부 실행 서비스 연동"
-                    : "Python 3.11 · Standard Library · No external packages"}
+                    ? t.editor_langBadgeJava
+                    : t.editor_langBadgePy}
               </span>
             </div>
           </section>
@@ -1157,7 +1176,7 @@ export default function Page() {
               >
                 <div className="shrink-0 h-9 flex items-center justify-between px-3 border-b border-prova-line bg-[#0f141a]">
                   <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium">
-                    Variable Monitor
+                    {t.variable_label}
                   </span>
                   <div className="flex items-center gap-1 text-prova-muted">
                     <button className="hover:text-[#c9d1d9] transition-colors">
@@ -1178,7 +1197,7 @@ export default function Page() {
                 <div className="flex-1 overflow-auto min-h-0 bg-[#0d1117]">
                   {!currentStep && (
                     <div className="p-4 text-xs text-prova-muted italic">
-                      실행 후 변수가 표시됩니다.
+                      {t.variable_empty}
                     </div>
                   )}
                   {currentStep &&
@@ -1233,17 +1252,17 @@ export default function Page() {
               >
                 <div className="shrink-0 h-9 flex items-center justify-between px-3 border-y border-prova-line bg-[#0f141a]">
                   <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium">
-                    Input
+                    {t.input_label}
                   </span>
                   <span className="text-[10px] text-prova-muted font-mono">
-                    stdin
+                    {t.input_stdin}
                   </span>
                 </div>
                 <div className="flex-1 min-h-0 bg-[#0d1117] p-3">
                   <div className="h-full rounded-md border border-[#30363d] bg-[#161b22] p-3 flex flex-col gap-3">
                     <textarea
                       className="flex-1 min-h-0 rounded border border-prova-line bg-[#0d1117] text-xs font-mono p-2 resize-none placeholder:text-prova-muted focus:outline-none focus:border-[#58a6ff]/60 transition-colors disabled:opacity-40"
-                      placeholder="입력값을 작성하세요"
+                      placeholder={t.input_placeholder}
                       value={stdin}
                       onChange={(e) => setStdin(e.target.value)}
                       disabled={isRunning || pyodideStatus === "error"}
@@ -1265,9 +1284,9 @@ export default function Page() {
                       }
                       title={
                         isCodeEmpty
-                          ? "코드를 입력한 후 디버깅을 시작하세요."
+                          ? t.run_titleNoCode
                           : isStdinEmpty
-                            ? "예시 입력(stdin)을 입력한 후 디버깅을 시작하세요."
+                            ? t.run_titleNoStdin
                             : undefined
                       }
                       onClick={() => {
@@ -1281,23 +1300,17 @@ export default function Page() {
                             setLanguage(runLanguage);
                             addToast(
                               "ok",
-                              `코드 패턴을 감지해 ${languageDisplayLabel(runLanguage)}로 전환했습니다. 다시 실행해 주세요.`,
+                              t.toast_langSwitch(languageDisplayLabel(runLanguage)),
                             );
                             return;
                           }
                         }
                         if (isCodeEmpty) {
-                          addToast(
-                            "warn",
-                            "코드를 입력한 후 디버깅을 시작하세요.",
-                          );
+                          addToast("warn", t.toast_noCode);
                           return;
                         }
                         if (isStdinEmpty) {
-                          addToast(
-                            "warn",
-                            "예시 입력(stdin)을 입력한 후 디버깅을 시작하세요.",
-                          );
+                          addToast("warn", t.toast_noStdin);
                           return;
                         }
                         try {
@@ -1314,6 +1327,7 @@ export default function Page() {
                       }}
                     >
                       {runButtonLabel(
+                        t,
                         pyodideStatus,
                         mergedTrace.length > 0 && code === lastRunCode,
                         isCodeEmpty,
@@ -1345,7 +1359,7 @@ export default function Page() {
               >
                 <div className="shrink-0 h-9 flex items-center justify-between px-3 border-y border-prova-line bg-[#0f141a]">
                   <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium">
-                    Output
+                    {t.output_label}
                   </span>
                   <span
                     className={`text-[10px] font-mono ${isError ? "text-prova-red" : "text-prova-muted"}`}
