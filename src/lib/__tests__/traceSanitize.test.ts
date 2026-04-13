@@ -52,11 +52,14 @@ describe("isRuntimeNoiseVar", () => {
 
   it("isRuntimeNoiseVar는 Java I/O 객체(Scanner, BufferedReader 등)를 노이즈로 판별한다 — 변수명 무관", () => {
     const scannerVal = "java.util.Scanner[delimiters=\\p{javaWhitespace}+]";
+    const stVal = "java.util.StringTokenizer@9abced";
     const brVal = "java.io.BufferedReader@1a2b3c";
     const bwVal = "java.io.BufferedWriter@4d5e6f";
     const isrVal = "java.io.InputStreamReader@7a8b9c";
     const pwVal = "java.io.PrintWriter@ab1cd2";
     expect(isRuntimeNoiseVar("sc", scannerVal, "java")).toBe(true);
+    expect(isRuntimeNoiseVar("st", stVal, "java")).toBe(true);
+    expect(isRuntimeNoiseVar("asdfasdfawniuher", stVal, "java")).toBe(true); // 변수명 무관
     expect(isRuntimeNoiseVar("br", brVal, "java")).toBe(true);
     expect(isRuntimeNoiseVar("reader", brVal, "java")).toBe(true);  // 변수명 무관
     expect(isRuntimeNoiseVar("input", isrVal, "java")).toBe(true);  // 변수명 무관

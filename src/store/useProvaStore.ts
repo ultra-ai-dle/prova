@@ -104,6 +104,7 @@ export const useProvaStore = create<ProvaState>((set, get) => ({
       mergedTrace: [],
       branchLines: initialBranchLines,
       varTypes: {},
+      metadata: null,
       globalError: null,
       playback: { ...get().playback, currentStep: 0, isPlaying: false }
     }),

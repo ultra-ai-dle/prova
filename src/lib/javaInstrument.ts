@@ -2,6 +2,7 @@
 const HELPER = [
   "  static int __step=0;",
   "  static int __depth=0;",
+  "  static int __serDepth=0;",
   "  static String __func=\"main\";",
   "  static java.util.ArrayDeque<String> __fs=new java.util.ArrayDeque<>();",
   "  static void __en(String f){__fs.push(__func);__func=f;__depth++;}",
@@ -31,6 +32,32 @@ const HELPER = [
   "        b.append(\"\\\"\").append(e.getKey()).append(\"\\\":\").append(__s(e.getValue()));f=false;",
   "      }",
   "      return b.append(\"}\").toString();",
+  "    }",
+  "    if(__serDepth<2){",
+  "      Class<?> c=o.getClass();",
+  "      String cn=c.getName();",
+  "      if(!cn.startsWith(\"java.\")){",
+  "        try{",
+  "          __serDepth++;",
+  "          java.lang.reflect.Field[] fs=c.getDeclaredFields();",
+  "          StringBuilder b=new StringBuilder(\"{\");",
+  "          b.append(\"\\\"__class\\\":\\\"\").append(c.getSimpleName()).append(\"\\\"\");",
+  "          boolean f=false;",
+  "          for(java.lang.reflect.Field fld:fs){",
+  "            int m=fld.getModifiers();",
+  "            if(java.lang.reflect.Modifier.isStatic(m)||fld.isSynthetic())continue;",
+  "            try{",
+  "              fld.setAccessible(true);",
+  "              Object fv=fld.get(o);",
+  "              if(!f)b.append(\",\");",
+  "              b.append(\"\\\"\").append(fld.getName()).append(\"\\\":\").append(__s(fv));",
+  "              f=false;",
+  "            }catch(Throwable ignoreField){}",
+  "          }",
+  "          return b.append(\"}\").toString();",
+  "        }catch(Throwable ignoreObj){}",
+  "        finally{if(__serDepth>0)__serDepth--;}",
+  "      }",
   "    }",
   "    String s=o.toString();",
   "    return \"\\\"\"+s.replace(\"\\\\\",\"\\\\\\\\\").replace(\"\\\"\",\"\\\\\\\"\").replace(\"\\n\",\"\\\\n\")+\"\\\"\";",
@@ -154,6 +181,14 @@ function leadingSpaces(line: string): string {
   return (line.match(/^(\s*)/) ?? ["", ""])[1] + "  ";
 }
 
+function isClosedStatementLine(trimmed: string): boolean {
+  const noComment = trimmed.replace(/\/\/.*$/, "").trim();
+  if (!noComment) return false;
+  // 계측은 문장이 실제로 닫힌 줄에서만 삽입한다.
+  // 멀티라인 호출/생성자 인자 중간 줄에 끼어들면 Java 컴파일이 깨진다.
+  return /[;{}]\s*$/.test(noComment);
+}
+
 interface ScopeVar { name: string; depth: number; }
 
 function makeTraceCall(
@@ -199,10 +234,12 @@ export function instrumentJavaCode(code: string): { instrumented: string; result
   let helperInjected    = false;
   let braceDepth        = 0;
   let inClassBody       = false;
+  let currentClassName  = "Main";
   let inMethod          = false;
   let methodDepth       = 0;
   let currentMethodName = "main";
   let currentMethodIsVoid = false;
+  let currentMethodIsConstructor = false;
 
   // 클래스 레벨 static 필드 — 모든 __t() 에 항상 포함
   const classVars: string[] = [];
@@ -219,6 +256,8 @@ export function instrumentJavaCode(code: string): { instrumented: string; result
 
     // ── 헬퍼 주입: class ... { 라인 직후 ──────────────────────────────────────
     if (!helperInjected && /\bclass\s+\w/.test(line) && line.includes("{")) {
+      const classMatch = line.match(/\bclass\s+(\w+)/);
+      if (classMatch) currentClassName = classMatch[1];
       push(line, lineNum);
       for (const hLine of HELPER.split("\n")) push(hLine, lineNum);
       helperInjected = true;
@@ -242,18 +281,20 @@ export function instrumentJavaCode(code: string): { instrumented: string; result
 
     // ── 메서드 진입 감지 ───────────────────────────────────────────────────────
     let isMethodEntryLine = false;
-    if (
-      inClassBody && !inMethod &&
-      /\b(?:void|int|long|double|float|boolean|char|String)\b/.test(line) &&
-      /\)\s*(?:throws\s+[\w,\s]+)?\s*\{/.test(line)
-    ) {
-      // 메서드 이름: ( 앞의 마지막 식별자
-      const allMatches = [...line.matchAll(/(\w+)\s*\(/g)];
-      currentMethodName   = allMatches.length > 0 ? allMatches[allMatches.length - 1][1] : "main";
-      currentMethodIsVoid = /\bvoid\b/.test(line);
-      inMethod            = true;
-      methodDepth         = braceDepth + opens - closes;
-      isMethodEntryLine   = true;
+    if (inClassBody && !inMethod) {
+      // 생성자와 메서드를 구분하기 위해 "반환 타입 + 메서드명(...){"
+      // 형태만 메서드 진입으로 간주한다.
+      const methodDecl = line.match(
+        /^\s*(?:(?:public|private|protected|static|final|synchronized|native|abstract)\s+)*(?:<[^>]+>\s+)?((?:void|int|long|double|float|boolean|char|byte|short|String|[A-Z][A-Za-z0-9_]*)(?:<[^>]*>)?(?:\[\])*)\s+([A-Za-z_]\w*)\s*\([^)]*\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/,
+      );
+      if (methodDecl) {
+        currentMethodName = methodDecl[2];
+        currentMethodIsVoid = methodDecl[1] === "void";
+        currentMethodIsConstructor = false;
+        inMethod = true;
+        methodDepth = braceDepth + opens - closes;
+        isMethodEntryLine = true;
+      }
     }
 
     push(line, lineNum);
@@ -281,7 +322,10 @@ export function instrumentJavaCode(code: string): { instrumented: string; result
     if (!inMethod) continue;
     // 메서드 진입 라인 직후: __en 삽입
     if (isMethodEntryLine) {
-      push(`${leadingSpaces(line)}__en("${currentMethodName}");`, lineNum);
+      // 생성자는 this()/super()가 첫 statement여야 하므로 진입 계측을 주입하지 않는다.
+      if (!currentMethodIsConstructor) {
+        push(`${leadingSpaces(line)}__en("${currentMethodName}");`, lineNum);
+      }
       continue;
     }
     if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
@@ -302,11 +346,14 @@ export function instrumentJavaCode(code: string): { instrumented: string; result
     // 지역변수 선언: scopeVars에 추가 후 __t
     const declMatch = line.match(VAR_DECL_RE);
     if (declMatch) {
+      if (!isClosedStatementLine(trimmed)) continue;
       const v = declMatch[1];
       if (!scopeVars.find(sv => sv.name === v)) scopeVars.push({ name: v, depth: braceDepth });
       push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`, lineNum);
       continue;
     }
+
+    if (!isClosedStatementLine(trimmed)) continue;
 
     // 나머지 모든 statement (대입, if, while, return, 메서드 호출 등) — 모두 __t 삽입
     // continue / break / return / throw: 뒤에 삽입하면 unreachable → __t를 앞으로 이동

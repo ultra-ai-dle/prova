@@ -4,11 +4,51 @@ import { parseJavaTrace, parseJavaCompileErrorPayload } from "@/lib/javaTracePar
 
 const MAX_CODE_LENGTH = 50_000;
 
+function normalizeJavaSourceForRunner(source: string): string {
+  let normalized = source;
+
+  // Preserve line count: replace package statement text with empty string,
+  // leaving the original newline in place.
+  normalized = normalized.replace(/^\s*package\s+[\w.]+\s*;\s*$/gm, "");
+
+  // BOJ-style runner contract:
+  // - top-level class should be treated as public Main for consistent compilation/execution.
+  // - supports both `public class Foo` and bare `class Foo`.
+  normalized = normalized.replace(
+    /^(\s*)(?:(?:public|protected|private|abstract|final|sealed|non-sealed)\s+)*class\s+[A-Za-z_]\w*/m,
+    (_full, indent: string) => `${indent}public class Main`,
+  );
+
+  return normalized;
+}
+
 function logJavaExecute(
   phase: string,
   detail: Record<string, string | number | undefined>,
 ) {
   console.error("[/api/java/execute]", phase, detail);
+}
+
+function timeoutPayload(message: string) {
+  return {
+    rawTrace: [
+      {
+        step: 0,
+        line: 1,
+        vars: {},
+        scope: { func: "main", depth: 0 },
+        parent_frames: [],
+        stdout: [],
+        runtimeError: {
+          type: "TimeoutError",
+          message,
+          line: 1,
+        },
+      },
+    ],
+    branchLines: { loop: [], branch: [] },
+    varTypes: {},
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -39,7 +79,8 @@ export async function POST(req: NextRequest) {
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (serviceToken) headers["Authorization"] = `Bearer ${serviceToken}`;
 
-  const { instrumented, resultLineMap } = instrumentJavaCode(code);
+  const normalizedCode = normalizeJavaSourceForRunner(code);
+  const { instrumented, resultLineMap } = instrumentJavaCode(normalizedCode);
   const runUrl = serviceUrl.replace(/\/+$/, "") + "/run";
 
   let upstream: Response;
@@ -74,6 +115,15 @@ export async function POST(req: NextRequest) {
     stderr: string;
     exitCode: number;
   };
+
+  // run.sh timeout(124) 등 실행 시간 초과는 컴파일 에러가 아니다.
+  if (exitCode === 124) {
+    logJavaExecute("timeout", {
+      exitCode: String(exitCode),
+      stderrPreview: stderr.slice(0, 400),
+    });
+    return NextResponse.json(timeoutPayload("실행 시간 초과(Timeout)"));
+  }
 
   // 컴파일 에러: trace step 없이 비정상 종료
   // → 에러 라인을 runtimeError로 담아 200으로 반환, 에디터가 라인 하이라이트 처리
