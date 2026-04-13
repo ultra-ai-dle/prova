@@ -25,23 +25,74 @@ function extractVarTypesUnion(rawTrace: RawTraceStep[]): Record<string, string> 
   return result;
 }
 
+// ─── 컴파일 에러 파싱 ─────────────────────────────────────────────────────────
+
+// "Main.java:12: error: ';' expected"
+const COMPILE_ERROR_RE = /^Main\.java:(\d+):\s*error:\s*(.+)/m;
+
+function parseCompileError(stderr: string) {
+  const match = stderr.match(COMPILE_ERROR_RE);
+  if (!match) return null;
+  return {
+    type:    "CompileError",
+    message: match[2].trim(),
+    line:    parseInt(match[1], 10),
+  };
+}
+
 // ─── 런타임 에러 파싱 ──────────────────────────────────────────────────────────
 
 // "Exception in thread "main" java.lang.NullPointerException: ..."
-// "Main.java:12: error: ..." (컴파일 에러, 여기선 다루지 않음)
 const EXCEPTION_RE = /^(?:Exception in thread\s+"\w+"?\s+)?(\w[\w.]*Exception[\w.]*):\s*(.*)/m;
 const AT_LINE_RE   = /\bat Main\.main\(Main\.java:(\d+)\)/;
 
-function parseRuntimeError(stderr: string, fallbackLine: number) {
+function parseRuntimeError(stderr: string, fallbackLine: number, resultLineMap?: number[]) {
   const exMatch = stderr.match(EXCEPTION_RE);
   if (!exMatch) return null;
 
   const lineMatch = stderr.match(AT_LINE_RE);
+  const rawLine = lineMatch ? parseInt(lineMatch[1], 10) : null;
+  // AT_LINE_RE가 주는 라인은 계기화 코드 기준 → resultLineMap으로 역매핑
+  const line = rawLine && resultLineMap
+    ? (resultLineMap[rawLine - 1] ?? fallbackLine)
+    : (rawLine ?? fallbackLine);
+
   return {
     type:    exMatch[1].split(".").pop() ?? exMatch[1],
     message: exMatch[2].trim(),
-    line:    lineMatch ? parseInt(lineMatch[1], 10) : fallbackLine,
+    line,
   };
+}
+
+// ─── 컴파일 에러 → WorkerDonePayload ──────────────────────────────────────────
+
+/**
+ * 컴파일 에러를 runtimeError가 붙은 단일 step trace로 변환한다.
+ * route.ts에서 status 400 대신 이 payload를 200으로 반환해
+ * 에디터가 에러 라인을 하이라이트할 수 있게 한다.
+ */
+export function parseJavaCompileErrorPayload(stderr: string, resultLineMap?: number[]): WorkerDonePayload {
+  const raw = parseCompileError(stderr);
+  const compileError = raw
+    ? {
+        type:    raw.type,
+        message: raw.message,
+        // 계기화 코드 라인 → 원본 라인으로 역매핑
+        line:    resultLineMap ? (resultLineMap[raw.line - 1] ?? raw.line) : raw.line,
+      }
+    : { type: "CompileError", message: stderr.trim() || "컴파일 오류", line: 1 };
+
+  const step: RawTraceStep = {
+    step:          0,
+    line:          compileError.line,
+    vars:          {},
+    scope:         { func: "main", depth: 0 },
+    parent_frames: [],
+    stdout:        [],
+    runtimeError:  compileError,
+  };
+
+  return { rawTrace: [step], branchLines: { loop: [], branch: [] }, varTypes: {} };
 }
 
 // ─── 메인 파서 ─────────────────────────────────────────────────────────────────
@@ -61,6 +112,7 @@ export function parseJavaTrace(
   stderr: string,
   stdout: string,
   limits?: ParseLimits,
+  resultLineMap?: number[],
 ): WorkerDonePayload {
   const maxSteps = limits?.maxTraceSteps ?? 10_000;
   const rawTrace: RawTraceStep[] = [];
@@ -113,7 +165,7 @@ export function parseJavaTrace(
   lastStep.stdout = stdout.split("\n").filter(Boolean);
 
   // 런타임 에러
-  const runtimeError = parseRuntimeError(stderr, lastStep.line);
+  const runtimeError = parseRuntimeError(stderr, lastStep.line, resultLineMap);
   if (runtimeError) lastStep.runtimeError = runtimeError;
 
   const varTypes: Record<string, string>  = extractVarTypesUnion(rawTrace);

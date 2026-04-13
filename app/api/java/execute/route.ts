@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { instrumentJavaCode } from "@/lib/javaInstrument";
-import { parseJavaTrace }      from "@/lib/javaTraceParser";
+import { parseJavaTrace, parseJavaCompileErrorPayload } from "@/lib/javaTraceParser";
 
 const MAX_CODE_LENGTH = 50_000;
 
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (serviceToken) headers["Authorization"] = `Bearer ${serviceToken}`;
 
-  const instrumented = instrumentJavaCode(code);
+  const { instrumented, resultLineMap } = instrumentJavaCode(code);
   const runUrl = serviceUrl.replace(/\/+$/, "") + "/run";
 
   let upstream: Response;
@@ -76,20 +76,17 @@ export async function POST(req: NextRequest) {
   };
 
   // 컴파일 에러: trace step 없이 비정상 종료
+  // → 에러 라인을 runtimeError로 담아 200으로 반환, 에디터가 라인 하이라이트 처리
   if (exitCode !== 0 && !stderr.includes('"step":')) {
-    logJavaExecute("reject:compile_or_no_trace", {
+    logJavaExecute("compile_error", {
       exitCode: String(exitCode),
       stderrPreview: stderr.slice(0, 1200),
-      stdoutPreview: stdout.slice(0, 400),
     });
-    return NextResponse.json(
-      { error: stderr.trim() || "컴파일 오류" },
-      { status: 400 },
-    );
+    return NextResponse.json(parseJavaCompileErrorPayload(stderr, resultLineMap));
   }
 
   const payload = parseJavaTrace(stderr, stdout, {
     maxTraceSteps: limits?.maxTraceSteps,
-  });
+  }, resultLineMap);
   return NextResponse.json(payload);
 }

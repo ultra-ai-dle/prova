@@ -91,9 +91,20 @@ export function useProvaExecution({
             varTypes: sanitizedVarTypes,
           };
           setWorkerResult(sanitizedPayload);
+
+          // 에러 스텝 감지: AI 분석 전에 먼저 처리
+          // → AI 분석 실패 여부와 무관하게 에러 라인 하이라이트 보장
+          const errorStepIndex = sanitizedRawTrace.findIndex(
+            (step) => step.runtimeError,
+          );
+          if (errorStepIndex >= 0) {
+            setUiMode("errorStep");
+            setCurrentStep(errorStepIndex);
+            setPyodideStatus("ready");
+          }
+
           try {
             const analyzeKey = `${pipelineLanguage}\n@@\n${codeRef.current}\n@@\n${stableStringifyObject(sanitizedVarTypes)}\n@@\nmeta-v2-partition-pivot`;
-            const fromMemory = analyzeCacheRef.current.get(analyzeKey);
             const cachedMeta =
               analyzeCacheRef.current.get(analyzeKey) ??
               (await getFromCache(analyzeKey));
@@ -143,17 +154,16 @@ export function useProvaExecution({
               }
             }
             setMetadata(meta);
-            const errorStepIndex = sanitizedRawTrace.findIndex(
-              (step) => step.runtimeError,
-            );
-            setUiMode(errorStepIndex >= 0 ? "errorStep" : "visualizing");
-            setCurrentStep(errorStepIndex >= 0 ? errorStepIndex : 0);
+            if (errorStepIndex < 0) {
+              setUiMode("visualizing");
+              setCurrentStep(0);
+            }
             setPyodideStatus("ready");
           } catch (error) {
             const message =
               error instanceof Error ? error.message : String(error);
             if (message.includes("_400")) {
-              setUiMode("ready");
+              if (errorStepIndex < 0) setUiMode("ready");
               setPyodideStatus("ready");
               const serverMessage = message.includes("|")
                 ? message.split("|")[1]?.split(":")[0]
@@ -165,7 +175,7 @@ export function useProvaExecution({
               );
               return;
             }
-            setUiMode("ready");
+            if (errorStepIndex < 0) setUiMode("ready");
             setPyodideStatus("ready");
             setGlobalError({
               type: "NETWORK",
