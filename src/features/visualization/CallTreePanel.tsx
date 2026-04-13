@@ -102,6 +102,7 @@ export function CallTreePanel({ traceSteps, currentStep, onJumpToStep }: Props) 
 
       {/* Tree list */}
       {!isEmpty && <div className="flex-1 overflow-auto prova-scrollbar py-1">
+        <div className="min-w-max">
         {flatNodes.map(({ node, prefix }) => {
           const isActive = activeNode?.id === node.id;
           const isOnPath = activePath.has(node.id);
@@ -115,7 +116,7 @@ export function CallTreePanel({ traceSteps, currentStep, onJumpToStep }: Props) 
             <div
               key={node.id}
               ref={isActive ? activeRef : undefined}
-              className={`flex items-start gap-0.5 px-2 py-[3px] cursor-default transition-colors ${
+              className={`flex items-start gap-0.5 px-2 py-[3px] w-full cursor-default transition-colors whitespace-nowrap ${
                 isActive
                   ? "bg-[#2d2200]"
                   : isOnPath
@@ -151,7 +152,7 @@ export function CallTreePanel({ traceSteps, currentStep, onJumpToStep }: Props) 
               )}
 
               {/* Node content */}
-              <div className="min-w-0 flex-1 leading-5 text-[11px] font-mono">
+              <div className="shrink-0 leading-5 text-[11px] font-mono">
                 {/* Function name */}
                 <span
                   className={
@@ -206,6 +207,7 @@ export function CallTreePanel({ traceSteps, currentStep, onJumpToStep }: Props) 
             </div>
           );
         })}
+        </div>
       </div>}
 
       {/* Active call stack summary */}

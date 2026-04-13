@@ -750,13 +750,14 @@ export default function Page() {
                         </span>
                       </div>
                     ) : (
-                      code.split("\n").map((line, lineIdx) => {
+                      <div className={wordWrap ? undefined : "min-w-max"}>
+                      {code.split("\n").map((line, lineIdx) => {
                         const lineNo = lineIdx + 1;
                         const isActiveLine = lineNo === editCursorLine;
                         return (
                           <div
                             key={`edit-line-${lineIdx}`}
-                            className={`flex ${isActiveLine ? "bg-[#1a2533]/55 border-l-2 border-[#58a6ff]" : "border-l-2 border-transparent"}`}
+                            className={`flex w-full ${isActiveLine ? "bg-[#1a2533]/55 border-l-2 border-[#58a6ff]" : "border-l-2 border-transparent"}`}
                           >
                             <span
                               className={`w-9 shrink-0 text-right pr-3 select-none text-[11px] leading-5 ${
@@ -787,7 +788,8 @@ export default function Page() {
                             </span>
                           </div>
                         );
-                      })
+                      })}
+                      </div>
                     )}
                   </div>
                   <textarea

@@ -1,6 +1,11 @@
 // ─── 헬퍼 코드 (class 첫 번째 { 직후 삽입) ────────────────────────────────────
 const HELPER = [
   "  static int __step=0;",
+  "  static int __depth=0;",
+  "  static String __func=\"main\";",
+  "  static java.util.ArrayDeque<String> __fs=new java.util.ArrayDeque<>();",
+  "  static void __en(String f){__fs.push(__func);__func=f;__depth++;}",
+  "  static void __ex(){__func=__fs.isEmpty()?\"main\":__fs.pop();if(__depth>0)__depth--;}",
   "  static String __s(Object o){",
   "    if(o==null)return \"null\";",
   "    if(o instanceof Boolean||o instanceof Number)return String.valueOf(o);",
@@ -32,7 +37,9 @@ const HELPER = [
   "  }",
   "  static void __t(int line,Object...kv){",
   "    StringBuilder sb=new StringBuilder();",
-  "    sb.append(\"{\\\"step\\\":\").append(__step++).append(\",\\\"line\\\":\").append(line).append(\",\\\"vars\\\":{\");",
+  "    sb.append(\"{\\\"step\\\":\").append(__step++).append(\",\\\"line\\\":\").append(line)",
+  "      .append(\",\\\"func\\\":\\\"\").append(__func).append(\"\\\",\\\"depth\\\":\").append(__depth)",
+  "      .append(\",\\\"vars\\\":{\");",
   "    for(int i=0;i+1<kv.length;i+=2){",
   "      if(i>0)sb.append(\",\");",
   "      sb.append(\"\\\"\").append(kv[i]).append(\"\\\":\").append(__s(kv[i+1]));",
@@ -176,11 +183,13 @@ export function instrumentJavaCode(code: string): string {
   const lines                   = normalized.split("\n");
   const result: string[] = [];
 
-  let helperInjected = false;
-  let braceDepth     = 0;
-  let inClassBody    = false;
-  let inMethod       = false;
-  let methodDepth    = 0;
+  let helperInjected    = false;
+  let braceDepth        = 0;
+  let inClassBody       = false;
+  let inMethod          = false;
+  let methodDepth       = 0;
+  let currentMethodName = "main";
+  let currentMethodIsVoid = false;
 
   // 클래스 레벨 static 필드 — 모든 __t() 에 항상 포함
   const classVars: string[] = [];
@@ -225,9 +234,13 @@ export function instrumentJavaCode(code: string): string {
       /\b(?:void|int|long|double|float|boolean|char|String)\b/.test(line) &&
       /\)\s*(?:throws\s+[\w,\s]+)?\s*\{/.test(line)
     ) {
-      inMethod         = true;
-      methodDepth      = braceDepth + opens - closes;
-      isMethodEntryLine = true;
+      // 메서드 이름: ( 앞의 마지막 식별자
+      const allMatches = [...line.matchAll(/(\w+)\s*\(/g)];
+      currentMethodName   = allMatches.length > 0 ? allMatches[allMatches.length - 1][1] : "main";
+      currentMethodIsVoid = /\bvoid\b/.test(line);
+      inMethod            = true;
+      methodDepth         = braceDepth + opens - closes;
+      isMethodEntryLine   = true;
     }
 
     result.push(line);
@@ -238,15 +251,26 @@ export function instrumentJavaCode(code: string): string {
       if (scopeVars[j].depth > braceDepth) scopeVars.splice(j, 1);
     }
 
-    // ── 메서드 이탈 감지 ───────────────────────────────────────────────────────
+    // ── 메서드 이탈 감지: 닫는 } 앞에 void 암묵적 return 처리 ─────────────────
     if (inMethod && braceDepth < methodDepth) {
+      if (currentMethodIsVoid) {
+        // unreachable 방지: depth>0 일 때만 __ex()
+        const closingBrace = result.pop()!;
+        result.push(`${leadingSpaces(line)}if(__depth>0)__ex();`);
+        result.push(closingBrace);
+      }
       inMethod = false;
+      scopeVars.length = 0;
       continue;
     }
 
     // ── 계측 삽입 (메서드 내부, 모든 statement) ────────────────────────────────
     if (!inMethod) continue;
-    if (isMethodEntryLine) continue;
+    // 메서드 진입 라인 직후: __en 삽입
+    if (isMethodEntryLine) {
+      result.push(`${leadingSpaces(line)}__en("${currentMethodName}");`);
+      continue;
+    }
     if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
     // 순수 블록 경계 라인은 statement가 아님
     if (trimmed === "{" || trimmed === "}") continue;
@@ -276,6 +300,8 @@ export function instrumentJavaCode(code: string): string {
     if (/^(?:continue|break|return|throw)\b/.test(trimmed)) {
       const jumpLine = result.pop()!;
       result.push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`);
+      // return/throw 전에 콜스택 이탈
+      result.push(`${leadingSpaces(line)}__ex();`);
       result.push(jumpLine);
     } else {
       result.push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`);

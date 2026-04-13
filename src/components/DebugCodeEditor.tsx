@@ -55,6 +55,7 @@ export function DebugCodeEditor({
         wordWrap ? "overflow-y-auto overflow-x-hidden" : "overflow-auto"
       }`}
     >
+      <div className={wordWrap ? undefined : "min-w-max"}>
       {code.split("\n").map((line, index) => {
         const lineNo = index + 1;
         const errorLine = currentStep?.runtimeError
@@ -84,7 +85,7 @@ export function DebugCodeEditor({
           <div
             key={lineNo}
             onClick={executed ? () => handleLineClick(lineNo) : undefined}
-            className={`flex items-center font-mono text-[12px] leading-5 transition-colors ${
+            className={`flex items-center w-full font-mono text-[12px] leading-5 transition-colors ${
               error
                 ? "bg-[#3d0b0b] border-l-2 border-prova-red"
                 : active
@@ -137,6 +138,7 @@ export function DebugCodeEditor({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

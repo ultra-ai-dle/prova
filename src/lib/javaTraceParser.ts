@@ -73,6 +73,8 @@ export function parseJavaTrace(
       const parsed = JSON.parse(trimmed) as {
         step: number;
         line: number;
+        func?: string;
+        depth?: number;
         vars: Record<string, unknown>;
       };
 
@@ -80,7 +82,7 @@ export function parseJavaTrace(
         step:          parsed.step,
         line:          parsed.line,
         vars:          parsed.vars ?? {},
-        scope:         { func: "main", depth: 0 },
+        scope:         { func: parsed.func ?? "main", depth: parsed.depth ?? 0 },
         parent_frames: [],
         stdout:        [],
         runtimeError:  null,
