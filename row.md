@@ -1,5 +1,7 @@
 ---
 
+> **⚠ 초기 기획서** — 이 문서는 프로젝트 초기 구상 단계의 기획서로, 현재 구현과 상당 부분 다릅니다. 실제 아키텍처는 `docs/architecture.md`, 현재 기능은 `NEXT_FEATURES.md`를 참조하세요. 주요 차이: 실행은 AI 시뮬레이션이 아닌 실제 런타임(Pyodide/Acorn/원격 JVM) 기반, 에디터는 Monaco가 아닌 커스텀 구현, 시각화는 React Flow가 아닌 D3/Three.js/커스텀 SVG 사용.
+
 # [기획서] Prova: AI 기반 알고리즘 시각화 디버거
 
 ## 1. 프로젝트 개요

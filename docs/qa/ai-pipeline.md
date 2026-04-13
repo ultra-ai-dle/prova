@@ -1,12 +1,11 @@
 # QA: AI Pipeline
 
 > 마지막 업데이트: 2026-04-12
-> 대상 파일: app/api/analyze/route.ts, app/api/explain/route.ts, src/lib/ai-providers.ts, src/lib/analyzeCache.ts, src/lib/partitionPivotEnrichment.ts, src/lib/graphModeInference.ts, src/lib/tagNormalize.ts
+> 대상 파일: app/api/analyze/route.ts, src/lib/ai-providers.ts, src/lib/analyzeCache.ts, src/lib/graphModeInference.ts, src/lib/tagNormalize.ts
 
 ## 정상 동작
 - [ ] **알고리즘 분류** — 코드를 실행하면 → AI가 알고리즘을 분류하고 에디터 하단에 태그 배지(예: `#bfs`, `#shortest-path`)가 표시된다
 - [ ] **시각화 전략 결정** — AI 분석이 완료되면 → GRID/LINEAR/GRAPH 등 적절한 시각화 전략이 자동 선택된다
-- [ ] **스텝별 설명 스트리밍** — AI 분석 후 → 8스텝 단위로 설명이 스트리밍되어 각 스텝에서 한국어 설명을 확인할 수 있다
 - [ ] **변수 역할 분류** — HEAP, QUEUE, STACK 등 자료구조를 사용하면 → 해당 변수에 역할 배지가 표시되고 전용 시각화가 적용된다
 - [ ] **알고리즘 이름 표시** — 분석 완료 후 → 상단 상태 배지에 알고리즘 이름이 표시된다
 - [ ] **Two-pointer 감지** — 배열에 두 개의 포인터를 사용하는 코드에서 → 배열 셀 아래에 포인터 배지가 자동 표시된다
@@ -26,7 +25,6 @@
 - [ ] **AI 분석 실패** — AI 분석이 실패하면 → "AI 분석에 실패했습니다" 토스트가 표시된다
 - [ ] **AI 429 한도 초과** — AI 요청 한도를 초과하면 → "AI 한도 초과(429)로 분석에 실패했습니다" 토스트가 표시된다
 - [ ] **전체 프로바이더 실패** — 모든 AI 프로바이더가 실패하면 → 기본 분석 결과(`기본 분석`)가 표시되고 변수 Key-Value 뷰로 폴백된다
-- [ ] **설명 생성 실패** — AI 설명 스트리밍이 실패하면 → "L.N 실행" 형태의 기본 설명이 적용되고 시각화는 `highlight`로 동작한다
 - [ ] **런타임 에러 설명** — 런타임 에러가 있는 스텝에서 AI가 분석하면 → 에러 원인(`root_cause`)과 수정 힌트(`fix_hint`)가 함께 표시된다
 - [ ] **인증 실패** — API 키가 잘못되면 → 즉시 실패하고 다른 프로바이더로 폴백하지 않는다
 - [ ] **API 키 미설정** — API 키가 전혀 없으면 → 기본 분석 + 기본 설명 템플릿으로 동작하고 시각화는 가능하다

@@ -39,5 +39,5 @@ EMPTY_ANNOTATED 검증:
 
 Store 연동:
 - [ ] setWorkerResult() → mergeTrace 자동 호출
-- [ ] setAnnotated() (SSE 청크 도착) → re-merge 실행
+- [ ] setAnnotated() → re-merge 실행
 - [ ] mergedTrace.length === rawTrace.length 항상 보장

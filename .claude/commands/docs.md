@@ -19,7 +19,7 @@ README는 수동 관리 대상이므로 이 커맨드의 범위가 아니다.
      - `docs/architecture.md` — 전체 파이프라인 개요, 모듈 경계 요약, 핵심 제약
      - `docs/features/execution.md` — Worker 실행 엔진
      - `docs/features/trace.md` — trace 수집 + 병합
-     - `docs/features/ai-pipeline.md` — analyze/explain AI 파이프라인
+     - `docs/features/ai-pipeline.md` — analyze AI 파이프라인
      - `docs/features/visualization.md` — 시각화 전략별 구조
    - 각 문서는 `한줄 요약 → 데이터 흐름 → 모듈 경계 → 핵심 제약` 포맷을 따른다.
    - 데이터 흐름 다이어그램은 반드시 Mermaid(` ```mermaid `)로 작성한다 — ASCII 박스 다이어그램 사용 금지.
@@ -33,7 +33,7 @@ README는 수동 관리 대상이므로 이 커맨드의 범위가 아니다.
    - AI 프롬프트에서 참조하는 타입은 특히 정확해야 함
 
    **API 라우트** (`api` 또는 전체):
-   - `/api/analyze`, `/api/explain`의 request/response 스키마 주석
+   - `/api/analyze`, `/api/java/execute`의 request/response 스키마 주석
    - 프롬프트 변경 시 입출력 계약이 주석과 일치하는지 확인
 
    **인라인 주석**:
@@ -51,7 +51,7 @@ docs: {업데이트된 영역} 문서화 업데이트
 docs: 아키텍처, API 라우트 문서화 업데이트
 
 - docs/architecture.md 데이터 흐름 섹션에 JS Worker 경로 추가
-- /api/explain SSE 응답 스키마 주석 추가
+- /api/analyze 응답 스키마 주석 추가
 
 ## 주의사항
 
