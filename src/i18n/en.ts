@@ -88,6 +88,12 @@ export const en: Translations = {
   gallery_confirm: "Confirm",
   gallery_empty: "No examples in this category.",
   gallery_footer: "Python · JavaScript supported | Click to load into editor",
+  gallery_difficulty_easy: "Easy",
+  gallery_difficulty_medium: "Medium",
+
+  // ── Visualization panel ───────────────────────────────────
+  viz_emptyTitle: "Visualization will appear here after execution",
+  viz_emptyBody: "Automatically detects BFS, DFS, Stacks, Queues, and Grid traversals.",
 
   // ── Locale switcher ──────────────────────────────────────
   locale_switchTo: "한국어",

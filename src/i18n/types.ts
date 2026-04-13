@@ -79,6 +79,12 @@ export interface Translations {
   gallery_confirm: string;
   gallery_empty: string;
   gallery_footer: string;
+  gallery_difficulty_easy: string;
+  gallery_difficulty_medium: string;
+
+  // ── Visualization panel ───────────────────────────────────
+  viz_emptyTitle: string;
+  viz_emptyBody: string;
 
   // ── Locale switcher ──────────────────────────────────────
   /** Label shown on the button — displays the language to switch TO */

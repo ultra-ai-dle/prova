@@ -87,6 +87,12 @@ export const ko: Translations = {
   gallery_confirm: "확인",
   gallery_empty: "해당 카테고리에 예제가 없습니다.",
   gallery_footer: "Python · JavaScript 지원 | 선택하면 에디터에 로드",
+  gallery_difficulty_easy: "쉬움",
+  gallery_difficulty_medium: "보통",
+
+  // ── Visualization panel ───────────────────────────────────
+  viz_emptyTitle: "실행 후 시각화가 여기에 표시됩니다",
+  viz_emptyBody: "BFS, DFS, 스택, 큐, 격자 탐색을 자동으로 감지합니다.",
 
   // ── Locale switcher ──────────────────────────────────────
   locale_switchTo: "EN",

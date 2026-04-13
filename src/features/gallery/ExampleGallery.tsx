@@ -3,6 +3,7 @@ import { CATEGORIES, EXAMPLES } from "@/data/examples";
 import type { ExampleCategory, ExampleItem, ExampleVariant } from "@/data/examples";
 import { ExampleCard } from "./ExampleCard";
 import { useT } from "@/i18n";
+import { useLocaleStore } from "@/store/useLocaleStore";
 
 interface ExampleGalleryProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export function ExampleGallery({
   onConfirm,
 }: ExampleGalleryProps) {
   const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -93,7 +95,7 @@ export function ExampleGallery({
                 }`}
                 onClick={() => onSelectCategory(cat.key)}
               >
-                {cat.label}
+                {locale === "en" ? cat.labelEn : cat.label}
               </button>
             ))}
           </nav>
@@ -107,7 +109,7 @@ export function ExampleGallery({
                     {t.gallery_confirmTitle}
                   </p>
                   <p className="text-[11px] text-prova-muted mb-4">
-                    {t.gallery_confirmDesc(confirmTarget.title)}
+                    {t.gallery_confirmDesc(locale === "en" ? confirmTarget.title : confirmTarget.titleKo)}
                   </p>
                   <div className="flex items-center justify-center gap-3">
                     <button
