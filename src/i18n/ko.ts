@@ -35,6 +35,9 @@ export const ko: Translations = {
   editor_cppDisabled: "C++ (준비중)",
   editor_tabTitle: (size, next) =>
     `현재 Tab ${size} — 클릭하여 Tab ${next}로 전환`,
+  editor_langBadgeJs: "JavaScript ES2022 · 동기 코드만 지원 · async/await 미지원",
+  editor_langBadgeJava: "Java · 외부 실행 서비스 연동",
+  editor_langBadgePy: "Python 3.11 · 표준 라이브러리 · 외부 패키지 미지원",
 
   // ── Run button ───────────────────────────────────────────
   run_enterCode: "코드를 입력하세요",

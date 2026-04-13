@@ -35,6 +35,9 @@ export const en: Translations = {
   editor_cppDisabled: "C++ (coming soon)",
   editor_tabTitle: (size, next) =>
     `Tab size: ${size} — Click to switch to Tab ${next}`,
+  editor_langBadgeJs: "JavaScript ES2022 · Synchronous only · async/await not supported",
+  editor_langBadgeJava: "Java · Remote execution service",
+  editor_langBadgePy: "Python 3.11 · Standard Library · No external packages",
 
   // ── Run button ───────────────────────────────────────────
   run_enterCode: "Enter code to begin",

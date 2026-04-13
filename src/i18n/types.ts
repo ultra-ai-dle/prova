@@ -28,6 +28,9 @@ export interface Translations {
   editor_langLabel: string;
   editor_cppDisabled: string;
   editor_tabTitle: (size: number, next: number) => string;
+  editor_langBadgeJs: string;
+  editor_langBadgeJava: string;
+  editor_langBadgePy: string;
 
   // ── Run button ───────────────────────────────────────────
   run_enterCode: string;

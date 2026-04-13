@@ -915,10 +915,10 @@ export default function Page() {
             <div className="shrink-0 px-3 py-2 border-t border-prova-line bg-[#0f141a]">
               <span className="text-[10px] text-prova-muted font-mono">
                 {lang(language).js
-                  ? "JavaScript ES2022 · 동기 코드만 지원 · async/await 미지원"
+                  ? t.editor_langBadgeJs
                   : lang(language).java
-                    ? "Java · 외부 실행 서비스 연동"
-                    : "Python 3.11 · Standard Library · No external packages"}
+                    ? t.editor_langBadgeJava
+                    : t.editor_langBadgePy}
               </span>
             </div>
           </section>
