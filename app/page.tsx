@@ -550,7 +550,7 @@ export default function Page() {
           <IconFiles />
         </button>
         <button
-          className="w-7 h-7 flex items-center justify-center rounded text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors shrink-0"
+          className="w-[22px] h-[22px] flex items-center justify-center rounded-full border border-[#8b949e]/40 bg-[#21262d] text-[11px] font-extrabold text-[#8b949e] hover:border-[#8b949e]/70 hover:bg-[#30363d] hover:text-[#c9d1d9] transition-colors shrink-0"
           aria-label={t.header_guidedTour}
           title={t.header_guidedTour}
           onClick={() => useTourStore.getState().startTour()}
