@@ -11,8 +11,10 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@types/nodemailer": "^8.0.0",
     "d3": "^7.9.0",
     "next": "latest",
+    "nodemailer": "^8.0.5",
     "react": "latest",
     "react-dom": "latest",
     "three": "^0.183.2",
