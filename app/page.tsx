@@ -138,6 +138,7 @@ export default function Page() {
     setPlaying,
     setSpeed,
     resetForRun,
+    resetToReady,
   } = useProvaStore();
 
   const currentStep = mergedTrace[playback.currentStep] ?? null;
@@ -375,13 +376,14 @@ export default function Page() {
 
   const handleGallerySelect = useCallback(
     (variant: ExampleVariant) => {
+      resetToReady();
       setCode(variant.code);
       setStdin(variant.stdin);
       setLanguageUserPinned(false);
       setLanguage(variant.language);
       gallery.close();
     },
-    [setStdin, gallery],
+    [resetToReady, setStdin, gallery],
   );
 
   const handleGalleryCardClick = useCallback(

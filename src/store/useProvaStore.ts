@@ -47,6 +47,7 @@ interface ProvaState {
   setPlaying: (isPlaying: boolean) => void;
   setSpeed: (speed: number) => void;
   resetForRun: () => void;
+  resetToReady: () => void;
 }
 
 const initialBranchLines: BranchLines = { loop: [], branch: [] };
@@ -103,6 +104,18 @@ export const useProvaStore = create<ProvaState>((set, get) => ({
       mergedTrace: [],
       branchLines: initialBranchLines,
       varTypes: {},
+      globalError: null,
+      playback: { ...get().playback, currentStep: 0, isPlaying: false }
+    }),
+  resetToReady: () =>
+    set({
+      uiMode: "ready",
+      rawTrace: [],
+      annotated: [],
+      mergedTrace: [],
+      branchLines: initialBranchLines,
+      varTypes: {},
+      metadata: null,
       globalError: null,
       playback: { ...get().playback, currentStep: 0, isPlaying: false }
     })
