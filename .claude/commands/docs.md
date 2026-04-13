@@ -63,13 +63,13 @@ docs: {영역} 문서화 업데이트
 
 **범위**: `docs/`, `app/**/CLAUDE.md`, `.cursor/rules/`, `prompts/` 등 저장소 전역의 `.md`. **`mocks/` 내부는 조사·수정하지 않는다.**
 
-**`/api/explain`**: 삭제 예정. 라우트가 남아 있어도 문서에서는 **없는 API·제공하지 않는 기능**으로 취급한다. 제품·아키텍처·다이어그램·클라이언트 흐름에서는 제거·축약. “향후 연동”“라우트만 존재” 같은 **코드 존재 전제** 서술은 지양하고 분석은 **`/api/analyze` 중심**만 남긴다. 히스토리/내부 메모에 한 줄만 남기는 수준은 예외 가능. 이번 작업에서 **라우트 코드를 지울 의무는 없다** — 문서만 맞춘다.
+**`/api/explain`**: 삭제 예정. 라우트가 남아 있어도 문서에서는 **없는 API·제공하지 않는 기능**으로 취급한다. 제품·아키텍처·다이어그램·클라이언트 흐름에서는 제거·축약. “향후 연동””라우트만 존재” 같은 **코드 존재 전제** 서술은 지양하고 분석은 **`/api/analyze` 중심**만 남긴다. 히스토리/내부 메모에 한 줄만 남기는 수준은 예외 가능. 이번 작업에서 **라우트 코드를 지울 의무는 없다** — 문서만 맞춘다.
 
-**진실의 원천(대조 우선순위)**: `src/types/prova.ts` · `src/features/execution/runtime.ts` · `public/worker/*` · `app/api/analyze/route.ts` · `app/api/java/execute/route.ts` · `src/hooks/useProvaExecution.ts` · `src/store/useProvaStore.ts` · `src/lib/ai-providers.ts` · `env.example` 등. `CLAUDE.md` / `docs/features/*` 는 참고만 하고 판단은 구현에 맡긴다. explain 경로는 문서 검증에서 제외.
+**진실의 원천(대조 우선순위)**: `src/types/prova.ts` · `src/features/execution/runtime.ts` · `public/worker/*` · `app/api/analyze/route.ts` · `app/api/java/execute/route.ts` · `src/hooks/useProvaExecution.ts` · `src/store/useProvaStore.ts` · `src/lib/ai-providers.ts` · `env.example` 등. `CLAUDE.md` / `docs/features/*` 는 참고만 하고 판단은 구현에 맞긴다. explain 경로는 문서 검증에서 제외.
 
 **체크리스트**: API 경로·필드명이 타입·라우트와 일치하는지 · 디버깅 1회 `fetch` 횟수 등은 `runtime`·`useProvaExecution` 기준 · Worker·postMessage·Java 원격 혼동 없는지 · explain은 위 정책 · `callWithFallback`/`AI_PROVIDER` 와 모순되는 “단일 프로바이더만” 같은 단정 수정 · **다이어그램**은 위 다이어그램 항목과 동일하게 엄격히 · 폴더·파일 경로 실존 여부.
 
-**수정 방식**: 사실만 바로잡기. 불확실하면 문서에 파일 경로·“현재 `src` 기준” 한 줄을 남긴다. 루트 `README`·기획서 등 수동 파일은 수정 전 확인 또는 사용자에게 확인.
+**수정 방식**: 사실만 바로잡기. 불확실하면 문서에 파일 경로·”현재 `src` 기준” 한 줄을 남긴다. 루트 `README`·기획서 등 수동 파일은 수정 전 확인 또는 사용자에게 확인.
 
 **금지 (`align` / `audit` 한정)**  
 - **코드·라우트·워커·설정 스크립트는 한 줄도 바꾸지 않는다.** 문서를 맞추려고 구현을 고치지 않는다(리팩터·버그 수정·포맷·주석·미사용 삭제 포함). 방향은 **코드 → 문서** 단방향.  
