@@ -23,7 +23,8 @@ export const ko: Translations = {
   banner_reload: "새로고침",
 
   // ── Editor ───────────────────────────────────────────────
-  editor_editMode: "편집 모드로 전환",
+  editor_editMode: "Edit",
+  editor_readMode: "Read",
   editor_wordWrapOn: "줄 바꿈 끄기",
   editor_wordWrapOff: "줄 바꿈 켜기",
   editor_copy: "코드 복사",
@@ -135,7 +136,7 @@ export const ko: Translations = {
   // ── Tour step contents ────────────────────────────────────
   tour_steps: [
     {
-      title: "Prova에 오신 것을 환영합니다",
+      title: "Frogger에 오신 것을 환영합니다",
       body: "AI가 알고리즘의 실행 흐름을 시각화해 주는 디버거입니다.\n핵심 기능을 안내해 드릴게요. 이 투어는 약 1분 정도 걸립니다.",
     },
     {
@@ -144,7 +145,7 @@ export const ko: Translations = {
     },
     {
       title: "언어 선택",
-      body: "Python과 JavaScript를 지원합니다.\n코드 패턴을 자동으로 감지하기도 해요.",
+      body: "Python, JavaScript, Java를 지원합니다.\n코드 패턴을 자동으로 감지하기도 해요.",
     },
     {
       title: "입력 & 실행",

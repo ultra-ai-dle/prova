@@ -23,7 +23,8 @@ export const en: Translations = {
   banner_reload: "Refresh",
 
   // ── Editor ───────────────────────────────────────────────
-  editor_editMode: "Switch to edit mode",
+  editor_editMode: "Edit",
+  editor_readMode: "Read",
   editor_wordWrapOn: "Disable word wrap",
   editor_wordWrapOff: "Enable word wrap",
   editor_copy: "Copy code",
@@ -136,7 +137,7 @@ export const en: Translations = {
   // ── Tour step contents ────────────────────────────────────
   tour_steps: [
     {
-      title: "Welcome to Prova",
+      title: "Welcome to Frogger",
       body: "An AI-powered algorithm visualizer & debugger.\nLet's walk you through the key features. This tour takes about a minute.",
     },
     {
@@ -145,7 +146,7 @@ export const en: Translations = {
     },
     {
       title: "Language Selection",
-      body: "Python and JavaScript are supported.\nProva can also auto-detect the language from your code.",
+      body: "Python, JavaScript, and Java are supported.\nFrogger can also auto-detect the language from your code.",
     },
     {
       title: "Input & Run",
