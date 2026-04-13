@@ -14,10 +14,7 @@ import { useTourStore } from "@/features/tour/useTourStore";
 import {
   IconFiles,
   IconSettings,
-  IconRefresh,
-  IconExpand,
   IconWarning,
-  IconPencil,
   IconMail,
 } from "@/components/icons";
 import { ContactModal } from "@/components/ContactModal";
@@ -94,6 +91,8 @@ export default function Page() {
   const [wordWrap, setWordWrap] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const editorHighlightRef = useRef<HTMLDivElement | null>(null);
+  const undoStackRef = useRef<string[]>([]);
+  const redoStackRef = useRef<string[]>([]);
   const codeRef = useRef(code);
   const [callTreeWidth, setCallTreeWidth] = useState(208);
   const [callTreeOpen, setCallTreeOpen] = useState(true);
@@ -559,7 +558,7 @@ export default function Page() {
           <IconSettings />
         </button>
         <button
-          className="h-7 px-2 rounded border border-prova-line bg-[#21262d] text-[10px] font-mono text-[#c9d1d9] hover:border-[#58a6ff]/40 transition-colors shrink-0"
+          className="h-7 w-9 flex items-center justify-center rounded border border-prova-line bg-[#21262d] text-[10px] font-mono text-[#c9d1d9] hover:border-[#58a6ff]/40 transition-colors shrink-0"
           aria-label={t.locale_switchTitle}
           title={t.locale_switchTitle}
           onClick={() => setLocale(locale === "ko" ? "en" : "ko")}
@@ -598,16 +597,12 @@ export default function Page() {
           {/* ── Code Editor ───────────────────────────── */}
           <section
             data-tour="editor"
-            className="min-h-0 flex flex-col min-w-0"
+            className="min-h-0 flex flex-col min-w-0 border-l-2 border-l-[#58a6ff]/30"
             style={{ width: `${paneWidths.left}%` }}
           >
             {/* Section header */}
             <div
-              className={`shrink-0 h-9 flex items-center justify-between px-3 border-b transition-colors ${
-                isDebugMode
-                  ? "border-[#58a6ff]/25 bg-[#0d1520]"
-                  : "border-prova-line bg-[#0f141a]"
-              }`}
+              className="shrink-0 h-9 flex items-center justify-between px-3 border-b border-prova-line bg-[#0f141a]"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium truncate">
@@ -675,19 +670,22 @@ export default function Page() {
             <div
               className={`flex-1 overflow-hidden relative transition-colors ${isDebugMode ? "bg-[#0c1016]" : "bg-prova-bg"}`}
             >
-              {/* Copy / Edit / Wrap overlay buttons */}
+              {/* Copy / Wrap / Mode overlay buttons */}
               <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
                 {isDebugMode && (
                   <button
-                    className="h-6 w-6 flex items-center justify-center rounded border border-[#e3b341]/40 bg-[#3d2b00]/80 text-[#e3b341] hover:bg-[#4a3500] hover:border-[#e3b341]/70 transition-colors"
+                    className="shrink-0 flex items-center gap-1 h-6 px-2 rounded border border-[#58a6ff]/40 bg-[#1a2d4a]/60 text-[#58a6ff] hover:bg-[#1a2d4a] hover:border-[#58a6ff]/70 transition-colors text-[10px] font-medium"
                     onClick={() => {
                       setPlaying(false);
                       setUiMode("ready");
+                      requestAnimationFrame(() => editorRef.current?.focus());
                     }}
                     title={t.editor_editMode}
-                    aria-label={t.editor_editMode}
                   >
-                    <IconPencil />
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                    {t.editor_editMode}
                   </button>
                 )}
                 <button
@@ -830,6 +828,9 @@ export default function Page() {
                     ref={editorRef}
                     value={code}
                     onChange={(e) => {
+                      undoStackRef.current.push(code);
+                      if (undoStackRef.current.length > 200) undoStackRef.current.shift();
+                      redoStackRef.current = [];
                       setCode(e.target.value);
                       setEditCursorLine(
                         lineFromOffset(
@@ -875,21 +876,107 @@ export default function Page() {
                         setTabSize(detected);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key !== "Tab" || !editorRef.current) return;
-                      e.preventDefault();
+                      if (!editorRef.current) return;
                       const el = editorRef.current;
-                      const start = el.selectionStart;
-                      const end = el.selectionEnd;
-                      const indent = " ".repeat(tabSize);
-                      const nextValue = `${code.slice(0, start)}${indent}${code.slice(end)}`;
-                      setCode(nextValue);
-                      setEditCursorLine(
-                        lineFromOffset(nextValue, start + indent.length),
-                      );
-                      requestAnimationFrame(() => {
-                        el.selectionStart = start + indent.length;
-                        el.selectionEnd = start + indent.length;
-                      });
+
+                      // Undo: Cmd+Z / Ctrl+Z
+                      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === "KeyZ") {
+                        e.preventDefault();
+                        if (undoStackRef.current.length === 0) return;
+                        redoStackRef.current.push(code);
+                        setCode(undoStackRef.current.pop()!);
+                        return;
+                      }
+
+                      // Redo: Cmd+Shift+Z / Ctrl+Shift+Z
+                      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyZ") {
+                        e.preventDefault();
+                        if (redoStackRef.current.length === 0) return;
+                        undoStackRef.current.push(code);
+                        setCode(redoStackRef.current.pop()!);
+                        return;
+                      }
+
+                      // Tab
+                      if (e.key === "Tab") {
+                        e.preventDefault();
+                        undoStackRef.current.push(code);
+                        redoStackRef.current = [];
+                        const start = el.selectionStart;
+                        const end = el.selectionEnd;
+                        const indent = " ".repeat(tabSize);
+                        const nextValue = `${code.slice(0, start)}${indent}${code.slice(end)}`;
+                        setCode(nextValue);
+                        setEditCursorLine(
+                          lineFromOffset(nextValue, start + indent.length),
+                        );
+                        requestAnimationFrame(() => {
+                          el.selectionStart = start + indent.length;
+                          el.selectionEnd = start + indent.length;
+                        });
+                        return;
+                      }
+
+                      // Comment toggle: Cmd+/ (Mac) or Ctrl+/ (Windows)
+                      if ((e.metaKey || e.ctrlKey) && (e.key === "/" || e.code === "Slash")) {
+                        e.preventDefault();
+                        undoStackRef.current.push(code);
+                        redoStackRef.current = [];
+                        const selStart = el.selectionStart;
+                        const selEnd = el.selectionEnd;
+
+                        const prefix = lang(language).py ? "# " : "// ";
+                        const prefixBase = prefix.trimEnd(); // "#" or "//"
+
+                        const lines = code.split("\n");
+
+                        const lineIdxOf = (offset: number) => {
+                          let pos = 0;
+                          for (let i = 0; i < lines.length; i++) {
+                            pos += lines[i].length + 1;
+                            if (pos > offset) return i;
+                          }
+                          return lines.length - 1;
+                        };
+
+                        const firstLine = lineIdxOf(selStart);
+                        const lastLine = lineIdxOf(selEnd > selStart ? selEnd - 1 : selEnd);
+
+                        const selectedLines = lines.slice(firstLine, lastLine + 1);
+                        const nonEmpty = selectedLines.filter((l) => l.trim().length > 0);
+                        const allCommented =
+                          nonEmpty.length > 0 &&
+                          nonEmpty.every((l) => l.startsWith(prefixBase));
+
+                        const newLines = lines.map((line, i) => {
+                          if (i < firstLine || i > lastLine) return line;
+                          if (line.trim().length === 0) return line;
+                          if (allCommented) {
+                            if (line.startsWith(prefix)) return line.slice(prefix.length);
+                            return line.slice(prefixBase.length);
+                          }
+                          if (line.startsWith(prefixBase)) return line;
+                          return prefix + line;
+                        });
+
+                        const nextValue = newLines.join("\n");
+                        setCode(nextValue);
+                        setEditCursorLine(lineFromOffset(nextValue, selStart));
+
+                        requestAnimationFrame(() => {
+                          const nl = nextValue.split("\n");
+                          let lineStart = 0;
+                          for (let i = 0; i < firstLine; i++) lineStart += nl[i].length + 1;
+                          let lineEnd = lineStart;
+                          for (let i = firstLine; i <= lastLine; i++) {
+                            lineEnd += nl[i].length;
+                            if (i < lastLine) lineEnd += 1;
+                          }
+                          el.selectionStart = lineStart;
+                          el.selectionEnd = lineEnd;
+                        });
+                        return;
+                      }
                     }}
                     className={`absolute inset-0 w-full h-full resize-none prova-scrollbar bg-transparent text-transparent caret-[#c9d1d9] font-mono text-[12px] leading-5 pl-14 pr-3 py-3 box-border outline-none ${wordWrap ? "overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-all" : "overflow-auto whitespace-pre"}`}
                     style={{ tabSize }}
@@ -971,23 +1058,18 @@ export default function Page() {
                   </span>
                 )}
               </div>
-              {isVisualizing && (
-                <div className="flex items-center gap-1 text-prova-muted">
-                  {shouldShowBitToggle && (
-                    <button
-                      className={`h-6 px-2 rounded border text-[10px] font-mono transition-colors ${
-                        bitmaskMode
-                          ? "border-[#58a6ff]/55 bg-[#15304e] text-[#9ac7ff]"
-                          : "border-prova-line bg-[#161b22] text-prova-muted hover:text-[#c9d1d9]"
-                      }`}
-                      onClick={() => setBitmaskMode((prev) => !prev)}
-                      title="비트마스킹 표시 토글"
-                    >
-                      BIT {bitmaskMode ? "ON" : "OFF"}
-                    </button>
-                  )}
-                  <IconRefresh />
-                </div>
+              {isVisualizing && shouldShowBitToggle && (
+                <button
+                  className={`h-6 px-2 rounded border text-[10px] font-mono transition-colors ${
+                    bitmaskMode
+                      ? "border-[#58a6ff]/55 bg-[#15304e] text-[#9ac7ff]"
+                      : "border-prova-line bg-[#161b22] text-prova-muted hover:text-[#c9d1d9]"
+                  }`}
+                  onClick={() => setBitmaskMode((prev) => !prev)}
+                  title="비트마스킹 표시 토글"
+                >
+                  BIT {bitmaskMode ? "ON" : "OFF"}
+                </button>
               )}
             </div>
             <div className="flex-1 min-h-0 overflow-hidden bg-[#0d1117] flex">
@@ -1178,14 +1260,6 @@ export default function Page() {
                   <span className="text-[10px] text-prova-muted uppercase tracking-widest font-medium">
                     {t.variable_label}
                   </span>
-                  <div className="flex items-center gap-1 text-prova-muted">
-                    <button className="hover:text-[#c9d1d9] transition-colors">
-                      <IconRefresh />
-                    </button>
-                    <button className="hover:text-[#c9d1d9] transition-colors ml-1">
-                      <IconExpand />
-                    </button>
-                  </div>
                 </div>
                 <div className="shrink-0 px-3 py-[6px] bg-[#161b22] border-b border-prova-line">
                   <span className="text-[10px] text-prova-muted font-mono">

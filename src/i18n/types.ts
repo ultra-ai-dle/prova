@@ -18,6 +18,7 @@ export interface Translations {
 
   // ── Editor ───────────────────────────────────────────────
   editor_editMode: string;
+  editor_readMode: string;
   editor_wordWrapOn: string;
   editor_wordWrapOff: string;
   editor_copy: string;

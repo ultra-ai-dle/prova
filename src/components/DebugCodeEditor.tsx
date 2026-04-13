@@ -82,7 +82,7 @@ export function DebugCodeEditor({
           >
             {/* 줄 번호 */}
             <span
-              className={`w-9 shrink-0 text-right pr-2 select-none text-[11px] leading-5 ${
+              className={`w-9 shrink-0 text-right pr-3 select-none text-[11px] leading-5 ${
                 active
                   ? error
                     ? "text-prova-red"
@@ -95,7 +95,7 @@ export function DebugCodeEditor({
 
             {/* 코드 */}
             <span
-              className={`pl-1 ${wordWrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"} ${
+              className={`pl-2 ${wordWrap ? "whitespace-pre-wrap break-all" : "whitespace-pre"} ${
                 active && !error ? "text-white" : ""
               }`}
               style={{ tabSize }}

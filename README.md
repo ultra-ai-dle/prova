@@ -21,7 +21,7 @@
 
 **코드를 실행하면 AI가 시각화와 해설을 완성하는 알고리즘 디버거**
 
-<blockquote>브라우저에서 Python / JavaScript 코드를 돌리면, AI가 알고리즘을 분류하고<br/>실행 흐름을 스텝별 시각화와 자연어 해설로 변환합니다.</blockquote>
+<blockquote>브라우저에서 Python / JavaScript / Java 코드를 돌리면, AI가 알고리즘을 분류하고<br/>실행 흐름을 스텝별 시각화와 자연어 해설로 변환합니다.</blockquote>
 
 <br clear="both" />
 <br clear="both" />

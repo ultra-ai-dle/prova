@@ -177,11 +177,24 @@ function makeTraceCall(
  * - static 필드(classVars)를 감지해 모든 __t() 호출에 포함시킨다.
  * - 각 지역변수 선언/대입문 뒤에 __t(lineNum, ...) 를 삽입한다.
  * - depth 기반 스코프 추적: { 진입 시 depth 증가, } 이탈 시 해당 depth 변수 제거.
+ *
+ * @returns instrumented 코드 문자열과 계기화된 라인 → 원본 라인 매핑 배열.
+ *          resultLineMap[i] = 계기화 코드 i번째 줄(0-based)의 원본 라인(1-based).
  */
-export function instrumentJavaCode(code: string): string {
+export function instrumentJavaCode(code: string): { instrumented: string; resultLineMap: number[] } {
   const { normalized, lineMap } = normalizeJava(code);
   const lines                   = normalized.split("\n");
   const result: string[] = [];
+  const resultLineMap: number[] = [];
+
+  // 원본 라인 번호를 추적하며 result에 push
+  let _currentOrigLine = 1;
+  const push = (line: string, origLine?: number) => {
+    result.push(line);
+    resultLineMap.push(origLine ?? _currentOrigLine);
+    if (origLine !== undefined) _currentOrigLine = origLine;
+  };
+  const pop = () => { result.pop(); resultLineMap.pop(); };
 
   let helperInjected    = false;
   let braceDepth        = 0;
@@ -206,8 +219,8 @@ export function instrumentJavaCode(code: string): string {
 
     // ── 헬퍼 주입: class ... { 라인 직후 ──────────────────────────────────────
     if (!helperInjected && /\bclass\s+\w/.test(line) && line.includes("{")) {
-      result.push(line);
-      result.push(HELPER);
+      push(line, lineNum);
+      for (const hLine of HELPER.split("\n")) push(hLine, lineNum);
       helperInjected = true;
       braceDepth += opens - closes;
       inClassBody = true;
@@ -243,7 +256,7 @@ export function instrumentJavaCode(code: string): string {
       isMethodEntryLine   = true;
     }
 
-    result.push(line);
+    push(line, lineNum);
     braceDepth += opens - closes;
 
     // ── 블록 이탈: depth 감소 시 해당 depth 로컬 변수 제거 ────────────────────
@@ -255,9 +268,9 @@ export function instrumentJavaCode(code: string): string {
     if (inMethod && braceDepth < methodDepth) {
       if (currentMethodIsVoid) {
         // unreachable 방지: depth>0 일 때만 __ex()
-        const closingBrace = result.pop()!;
-        result.push(`${leadingSpaces(line)}if(__depth>0)__ex();`);
-        result.push(closingBrace);
+        const closingBrace = result.pop()!; resultLineMap.pop();
+        push(`${leadingSpaces(line)}if(__depth>0)__ex();`, lineNum);
+        push(closingBrace, lineNum);
       }
       inMethod = false;
       scopeVars.length = 0;
@@ -268,7 +281,7 @@ export function instrumentJavaCode(code: string): string {
     if (!inMethod) continue;
     // 메서드 진입 라인 직후: __en 삽입
     if (isMethodEntryLine) {
-      result.push(`${leadingSpaces(line)}__en("${currentMethodName}");`);
+      push(`${leadingSpaces(line)}__en("${currentMethodName}");`, lineNum);
       continue;
     }
     if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
@@ -282,7 +295,7 @@ export function instrumentJavaCode(code: string): string {
         const v = forMatch[1];
         if (!scopeVars.find(sv => sv.name === v)) scopeVars.push({ name: v, depth: braceDepth });
       }
-      result.push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`);
+      push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`, lineNum);
       continue;
     }
 
@@ -291,22 +304,21 @@ export function instrumentJavaCode(code: string): string {
     if (declMatch) {
       const v = declMatch[1];
       if (!scopeVars.find(sv => sv.name === v)) scopeVars.push({ name: v, depth: braceDepth });
-      result.push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`);
+      push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`, lineNum);
       continue;
     }
 
     // 나머지 모든 statement (대입, if, while, return, 메서드 호출 등) — 모두 __t 삽입
     // continue / break / return / throw: 뒤에 삽입하면 unreachable → __t를 앞으로 이동
     if (/^(?:continue|break|return|throw)\b/.test(trimmed)) {
-      const jumpLine = result.pop()!;
-      result.push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`);
-      // return/throw 전에 콜스택 이탈
-      result.push(`${leadingSpaces(line)}__ex();`);
-      result.push(jumpLine);
+      const jumpLine = result.pop()!; resultLineMap.pop();
+      push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`, lineNum);
+      push(`${leadingSpaces(line)}__ex();`, lineNum);
+      push(jumpLine, lineNum);
     } else {
-      result.push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`);
+      push(`${leadingSpaces(line)}${makeTraceCall(lineNum, classVars, scopeVars, braceDepth)}`, lineNum);
     }
   }
 
-  return result.join("\n");
+  return { instrumented: result.join("\n"), resultLineMap };
 }
