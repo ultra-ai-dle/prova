@@ -6,19 +6,14 @@ export type Locale = "ko" | "en";
 
 const LOCALE_KEY = "prova:locale";
 
-function readSavedLocale(): Locale {
-  if (typeof window === "undefined") return "ko";
-  const saved = localStorage.getItem(LOCALE_KEY);
-  return saved === "en" ? "en" : "ko";
-}
-
 interface LocaleState {
   locale: Locale;
   setLocale: (locale: Locale) => void;
+  hydrateFromStorage: () => void;
 }
 
 export const useLocaleStore = create<LocaleState>((set) => ({
-  locale: readSavedLocale(),
+  locale: "ko", // SSR-safe default — client hydrates via hydrateFromStorage()
   setLocale: (locale) => {
     try {
       localStorage.setItem(LOCALE_KEY, locale);
@@ -26,5 +21,13 @@ export const useLocaleStore = create<LocaleState>((set) => ({
       // ignore storage failures
     }
     set({ locale });
+  },
+  hydrateFromStorage: () => {
+    try {
+      const saved = localStorage.getItem(LOCALE_KEY);
+      if (saved === "en") set({ locale: "en" });
+    } catch {
+      // ignore storage failures
+    }
   },
 }));

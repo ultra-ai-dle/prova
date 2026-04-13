@@ -110,7 +110,12 @@ export default function Page() {
   const [bitmaskMode, setBitmaskMode] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
   const t = useT();
-  const { locale, setLocale } = useLocaleStore();
+  const { locale, setLocale, hydrateFromStorage } = useLocaleStore();
+
+  useEffect(() => {
+    hydrateFromStorage();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const gallery = useGallery();
   const {
     splitRootRef,
