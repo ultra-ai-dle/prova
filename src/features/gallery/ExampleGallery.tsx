@@ -2,6 +2,8 @@ import { useEffect, useCallback, useMemo } from "react";
 import { CATEGORIES, EXAMPLES } from "@/data/examples";
 import type { ExampleCategory, ExampleItem, ExampleVariant } from "@/data/examples";
 import { ExampleCard } from "./ExampleCard";
+import { useT } from "@/i18n";
+import { useLocaleStore } from "@/store/useLocaleStore";
 
 interface ExampleGalleryProps {
   isOpen: boolean;
@@ -24,6 +26,9 @@ export function ExampleGallery({
   onCancelConfirm,
   onConfirm,
 }: ExampleGalleryProps) {
+  const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -65,12 +70,12 @@ export function ExampleGallery({
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-prova-line">
           <span className="text-[14px] font-semibold text-[#e6edf3]">
-            예제 갤러리
+            {t.gallery_title}
           </span>
           <button
             className="w-6 h-6 flex items-center justify-center rounded text-prova-muted hover:text-[#e6edf3] hover:bg-[#21262d] transition-colors"
             onClick={onClose}
-            aria-label="닫기"
+            aria-label={t.gallery_close}
           >
             ✕
           </button>
@@ -90,7 +95,7 @@ export function ExampleGallery({
                 }`}
                 onClick={() => onSelectCategory(cat.key)}
               >
-                {cat.label}
+                {locale === "en" ? cat.labelEn : cat.label}
               </button>
             ))}
           </nav>
@@ -101,23 +106,23 @@ export function ExampleGallery({
               <div className="flex items-center justify-center h-full min-h-[200px]">
                 <div className="text-center">
                   <p className="text-[13px] text-[#e6edf3] mb-1">
-                    현재 코드를 덮어쓸까요?
+                    {t.gallery_confirmTitle}
                   </p>
                   <p className="text-[11px] text-prova-muted mb-4">
-                    &ldquo;{confirmTarget.title}&rdquo; 예제로 교체됩니다.
+                    {t.gallery_confirmDesc(locale === "en" ? confirmTarget.title : confirmTarget.titleKo)}
                   </p>
                   <div className="flex items-center justify-center gap-3">
                     <button
                       className="px-4 py-1.5 text-[12px] rounded-md border border-prova-line text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors"
                       onClick={onCancelConfirm}
                     >
-                      취소
+                      {t.gallery_cancel}
                     </button>
                     <button
                       className="px-4 py-1.5 text-[12px] rounded-md bg-[#238636] text-white hover:bg-[#2ea043] transition-colors font-medium"
                       onClick={onConfirm}
                     >
-                      확인
+                      {t.gallery_confirm}
                     </button>
                   </div>
                 </div>
@@ -133,7 +138,7 @@ export function ExampleGallery({
                 ))}
                 {filtered.length === 0 && (
                   <div className="col-span-full text-center text-[12px] text-prova-muted py-8">
-                    해당 카테고리에 예제가 없습니다.
+                    {t.gallery_empty}
                   </div>
                 )}
               </div>
@@ -143,7 +148,7 @@ export function ExampleGallery({
 
         {/* Footer */}
         <div className="shrink-0 px-4 py-2 border-t border-prova-line text-[10px] text-prova-muted">
-          Python · JavaScript 지원 | 선택하면 에디터에 로드
+          {t.gallery_footer}
         </div>
       </div>
     </div>

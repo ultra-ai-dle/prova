@@ -4,6 +4,7 @@ import { useEffect, useCallback, useState, useRef } from "react";
 import { useTourStore } from "./useTourStore";
 import { TOUR_STEPS, type TourStep } from "./tourSteps";
 import { useProvaStore } from "@/store/useProvaStore";
+import { useT } from "@/i18n";
 
 /* ── Tooltip position calculator ─────────────────────── */
 
@@ -76,7 +77,6 @@ function buildClipPath(rect: DOMRect, pad = 8): string {
   const b = rect.bottom + pad;
   const r = rect.right + pad;
 
-  // Outer rect (full screen) → inner cutout (target area)
   return `polygon(
     0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%,
     ${l}px ${t}px, ${l}px ${b}px, ${r}px ${b}px, ${r}px ${t}px, ${l}px ${t}px
@@ -96,12 +96,11 @@ function Arrow({ side }: { side: TooltipPos["arrowSide"] }) {
   return <div className={styles[side]} />;
 }
 
-/* ── Main GuidedTour component ───────────────────────── */
-
 /* ── Completion modal ────────────────────────────────── */
 
 function CompletionModal() {
   const { showCompletionModal, closeCompletionModal } = useTourStore();
+  const t = useT();
 
   useEffect(() => {
     if (!showCompletionModal) return;
@@ -123,22 +122,22 @@ function CompletionModal() {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="투어 완료"
+        aria-label={t.tour_completionTitle}
         className="fixed z-[61] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] rounded-lg border border-[#30363d] bg-[#161b22] shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-in fade-in zoom-in-95 duration-200"
       >
         <div className="p-6 text-center">
           <div className="mx-auto mb-3 w-10 h-10 rounded-full bg-[#238636]/20 flex items-center justify-center">
             <span className="text-lg">✓</span>
           </div>
-          <h3 className="text-[15px] font-bold text-white">준비 완료!</h3>
+          <h3 className="text-[15px] font-bold text-white">{t.tour_completionTitle}</h3>
           <p className="mt-2 text-[12px] text-[#8b949e] leading-relaxed whitespace-pre-line">
-            {"이제 코드를 작성하고 디버깅을 시작해 보세요.\n투어를 다시 보려면 우측 상단 ? 버튼을 클릭하세요."}
+            {t.tour_completionBody}
           </p>
           <button
             className="mt-4 h-8 px-5 rounded bg-[#238636] text-[13px] text-white font-medium hover:bg-[#2ea043] transition-colors"
             onClick={closeCompletionModal}
           >
-            시작하기
+            {t.tour_completionStart}
           </button>
         </div>
       </div>
@@ -153,6 +152,7 @@ export function GuidedTour() {
     useTourStore();
   const pyodideStatus = useProvaStore((s) => s.pyodideStatus);
   const uiMode = useProvaStore((s) => s.uiMode);
+  const t = useT();
 
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
@@ -212,6 +212,7 @@ export function GuidedTour() {
   if (!targetRect) return null;
 
   const step = TOUR_STEPS[currentStep];
+  const localizedStep = t.tour_steps[currentStep];
   const pos = calcTooltipPos(targetRect, step.placement, tooltipHeight);
   const progress = ((currentStep + 1) / TOUR_STEPS.length) * 100;
   const isLast = currentStep === TOUR_STEPS.length - 1;
@@ -232,7 +233,7 @@ export function GuidedTour() {
         ref={tooltipRef}
         role="dialog"
         aria-modal="true"
-        aria-label={step.title}
+        aria-label={localizedStep.title}
         className="fixed z-[61] w-[320px] rounded-lg border border-[#30363d] bg-[#161b22] shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-in fade-in duration-200"
         style={{ top: pos.top, left: pos.left }}
       >
@@ -253,8 +254,10 @@ export function GuidedTour() {
           </span>
 
           {/* Content */}
-          <h3 className="mt-2 text-[14px] font-bold text-white">{step.title}</h3>
-          <p className="mt-1 text-[12px] text-[#8b949e] leading-relaxed whitespace-pre-line">{step.body}</p>
+          <h3 className="mt-2 text-[14px] font-bold text-white">{localizedStep.title}</h3>
+          <p className="mt-1 text-[12px] text-[#8b949e] leading-relaxed whitespace-pre-line">
+            {localizedStep.body}
+          </p>
 
           {/* Buttons */}
           <div className="mt-4 flex items-center justify-between">
@@ -262,7 +265,7 @@ export function GuidedTour() {
               className="text-[12px] text-[#8b949e] hover:text-[#c9d1d9] transition-colors"
               onClick={endTour}
             >
-              건너뛰기
+              {t.tour_skip}
             </button>
             <div className="flex items-center gap-2">
               {currentStep > 0 && (
@@ -270,14 +273,14 @@ export function GuidedTour() {
                   className="h-7 px-3 rounded border border-[#30363d] text-[12px] text-[#c9d1d9] hover:bg-[#21262d] transition-colors"
                   onClick={prevStep}
                 >
-                  이전
+                  {t.tour_prev}
                 </button>
               )}
               <button
                 className="h-7 px-3 rounded bg-[#238636] text-[12px] text-white font-medium hover:bg-[#2ea043] transition-colors"
                 onClick={nextStep}
               >
-                {isLast ? "시작하기!" : "다음"}
+                {isLast ? t.tour_finish : t.tour_next}
               </button>
             </div>
           </div>

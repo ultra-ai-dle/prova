@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { ExampleItem, ExampleVariant } from "@/data/examples";
+import { useT } from "@/i18n";
+import { useLocaleStore } from "@/store/useLocaleStore";
 
 const LANG_LABELS: Record<string, string> = {
   python: "Py",
@@ -15,6 +17,11 @@ interface ExampleCardProps {
 export function ExampleCard({ example, onSelect }: ExampleCardProps) {
   const [langIdx, setLangIdx] = useState(0);
   const variant = example.variants[langIdx];
+  const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
+
+  const primaryTitle = locale === "en" ? example.title : example.titleKo;
+  const secondaryTitle = locale === "en" ? example.titleKo : example.title;
 
   return (
     <button
@@ -23,10 +30,10 @@ export function ExampleCard({ example, onSelect }: ExampleCardProps) {
       onClick={() => onSelect(example, variant)}
     >
       <div className="text-[13px] font-semibold text-[#e6edf3] truncate">
-        {example.title}
+        {primaryTitle}
       </div>
       <div className="text-[11px] text-prova-muted mt-0.5 truncate">
-        {example.titleKo}
+        {secondaryTitle}
       </div>
 
       {/* Language toggle — only if more than 1 variant */}
@@ -68,7 +75,7 @@ export function ExampleCard({ example, onSelect }: ExampleCardProps) {
               : "bg-[#3d2b00]/60 text-[#e3b341]"
           }`}
         >
-          {example.difficulty === "easy" ? "Easy" : "Medium"}
+          {example.difficulty === "easy" ? t.gallery_difficulty_easy : t.gallery_difficulty_medium}
         </span>
       </div>
     </button>
