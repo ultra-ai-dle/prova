@@ -66,20 +66,7 @@ export function DebugCodeEditor({
         const executed = lineStepMap.has(lineNo);
         const hitInfo = executed ? getLineHitInfo(lineNo) : null;
 
-        // 도트 상태 결정
-        let dotClass = "";
-        if (executed) {
-          if (error) {
-            dotClass = "bg-[#f85149]";
-          } else if (active) {
-            dotClass = "bg-[#58a6ff]";
-          } else {
-            // 이미 실행 vs 아직 미실행 판별
-            const steps = lineStepMap.get(lineNo)!;
-            const hasVisited = steps.some((s) => s <= currentStepIndex);
-            dotClass = hasVisited ? "bg-[#58a6ff]/50" : "bg-[#58a6ff]/25";
-          }
-        }
+        const isMultiHit = active && hitInfo && hitInfo.totalHits > 1;
 
         return (
           <div
@@ -92,23 +79,7 @@ export function DebugCodeEditor({
                   ? "bg-[#2d3748]/60 border-l-2 border-[#58a6ff]"
                   : "border-l-2 border-transparent"
             } ${executed ? "cursor-pointer hover:bg-[#1c2333]" : "cursor-default"}`}
-            title={
-              hitInfo && hitInfo.totalHits > 1
-                ? `×${hitInfo.totalHits}`
-                : active && hitInfo && hitInfo.totalHits === 1
-                  ? "current"
-                  : undefined
-            }
           >
-            {/* 실행 도트: trace에 등장한 모든 라인에 항상 표시 */}
-            <span className="w-3 shrink-0 flex items-center justify-center">
-              {hitInfo && (
-                <span
-                  className={`inline-block w-1.5 h-1.5 rounded-full ${dotClass}`}
-                />
-              )}
-            </span>
-
             {/* 줄 번호 */}
             <span
               className={`w-9 shrink-0 text-right pr-2 select-none text-[11px] leading-5 ${
@@ -135,6 +106,23 @@ export function DebugCodeEditor({
                 </span>
               ))}
             </span>
+
+            {/* 반복 실행 인디케이터: active + multi-hit일 때만 표시 */}
+            {isMultiHit && (
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleLineClick(lineNo);
+                }}
+                className="ml-auto shrink-0 pl-4 pr-2 select-none cursor-pointer
+                  text-[10px] tracking-wider text-[#4a5568] hover:text-[#58a6ff]
+                  transition-colors"
+              >
+                <span className="text-[#58a6ff]/70">{hitInfo.currentHitIndex ?? "·"}</span>
+                <span className="mx-[2px] text-[#4a5568]/50">/</span>
+                <span>{hitInfo.totalHits}</span>
+              </span>
+            )}
           </div>
         );
       })}
