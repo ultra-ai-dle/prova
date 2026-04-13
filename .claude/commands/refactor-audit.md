@@ -21,7 +21,7 @@
    - 제거되거나 변경된 상태 필드가 있으면, 이를 참조하는 컴포넌트를 추적한다.
 
 4. **API 라우트 계약** (`api`):
-   - `/api/analyze`, `/api/explain`의 request body 파싱 + response 구조를 확인한다.
+   - `/api/analyze`, `/api/java/execute`의 request body 파싱 + response 구조를 확인한다.
    - 클라이언트에서 호출하는 코드의 기대 구조와 일치하는지 크로스체크한다.
 
 5. **Worker 메시지 포맷** (`worker`):
@@ -37,7 +37,7 @@
    - 특히 `AnalyzeMetadata`, `LinearPivotSpec`, `SpecialVarKind` 등의 필드명/enum 변경 시 영향 추적.
 
 8. **AI 프롬프트 ↔ 타입 동기화** (`prompt`):
-   - `app/api/analyze/route.ts`, `app/api/explain/route.ts` 내 프롬프트 문자열이 타입 필드명을 하드코딩하고 있다.
+   - `app/api/analyze/route.ts` 내 프롬프트 문자열이 타입 필드명을 하드코딩하고 있다.
    - 타입 필드명이 변경되면 프롬프트도 함께 수정해야 한다.
    - Gemini structured output 스키마(`route.ts` 내 JSON schema)도 `prova.ts` 타입과 일치해야 한다.
    - 프롬프트 변경이 감지되면 `/prompt-diff` 실행을 권고한다.
@@ -56,8 +56,8 @@ prova.ts (타입 정의)
   │     ├── GraphPanel.tsx
   │     ├── GridLinearPanel.tsx
   │     └── TimelineControls.tsx
-  ├── /api/analyze/route.ts (AI Phase 1 + Gemini 스키마 + 프롬프트 필드명)
-  ├── /api/explain/route.ts (AI Phase 2 + 프롬프트 필드명)
+  ├── /api/analyze/route.ts (AI 분류 + Gemini 스키마 + 프롬프트 필드명)
+  ├── /api/java/execute/route.ts (Java 원격 실행 ���록시)
   ├── src/lib/ (enrichment 모듈)
   │     ├── partitionPivotEnrichment.ts
   │     ├── tagNormalize.ts

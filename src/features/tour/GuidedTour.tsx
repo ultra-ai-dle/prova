@@ -132,7 +132,7 @@ function CompletionModal() {
           </div>
           <h3 className="text-[15px] font-bold text-white">준비 완료!</h3>
           <p className="mt-2 text-[12px] text-[#8b949e] leading-relaxed whitespace-pre-line">
-            {"이제 코드를 작성하고 디버깅을 시작해 보세요.\n투어를 다시 보려면 우측 상단 ⚙ 버튼을 클릭하세요."}
+            {"이제 코드를 작성하고 디버깅을 시작해 보세요.\n투어를 다시 보려면 우측 상단 ? 버튼을 클릭하세요."}
           </p>
           <button
             className="mt-4 h-8 px-5 rounded bg-[#238636] text-[13px] text-white font-medium hover:bg-[#2ea043] transition-colors"

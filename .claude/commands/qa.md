@@ -18,7 +18,7 @@
      - `trace` → `src/features/trace/`
      - `visualization` → `src/features/visualization/`
      - `playback` → `src/features/playback/`
-     - `ai-pipeline` → `app/api/analyze/`, `app/api/explain/`
+     - `ai-pipeline` → `app/api/analyze/`
 
 2. **컨텍스트 수집** (feature별로):
    - 해당 feature의 소스 코드를 읽는다.

@@ -13,7 +13,6 @@ import { GuidedTour } from "@/features/tour/GuidedTour";
 import { useTourStore } from "@/features/tour/useTourStore";
 import {
   IconFiles,
-  IconSettings,
   IconRefresh,
   IconExpand,
   IconWarning,
@@ -541,12 +540,12 @@ export default function Page() {
           <IconFiles />
         </button>
         <button
-          className="w-7 h-7 flex items-center justify-center rounded text-prova-muted hover:text-[#c9d1d9] hover:bg-[#21262d] transition-colors shrink-0"
-          aria-label="가이드 투어 다시보기"
-          title="가이드 투어 다시보기"
+          className="w-[22px] h-[22px] flex items-center justify-center rounded-full border border-[#8b949e]/40 bg-[#21262d] text-[11px] font-extrabold text-[#8b949e] hover:border-[#8b949e]/70 hover:bg-[#30363d] hover:text-[#c9d1d9] transition-colors shrink-0"
+          aria-label="가이드 투어"
+          title="가이드 투어"
           onClick={() => useTourStore.getState().startTour()}
         >
-          <IconSettings />
+          ?
         </button>
       </header>
 
